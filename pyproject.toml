@@ -67,6 +67,11 @@ dev = [
     "codespell>=2.3",
     "pre-commit>=3.7",
     "copier>=9.3",
+    {include-group = "docs"},
+]
+docs = [
+    "mkdocs-material>=9.6",
+    "mkdocstrings[python]>=1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -175,7 +180,7 @@ exclude-modules = "(^botbase\\.ext\\.|^botbase\\.database\\.)"
 # codespell
 # --------------------------------------------------------------------------------------
 [tool.codespell]
-skip = "*.lock,uv.lock,*.mako,./template,./.git,./.nox,./htmlcov"
+skip = "*.lock,uv.lock,*.mako,./template,./.git,./.nox,./htmlcov,./site"
 ignore-words-list = "crate,typ"
 
 # --------------------------------------------------------------------------------------

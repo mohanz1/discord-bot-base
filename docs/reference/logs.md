@@ -1,0 +1,3 @@
+# botbase.logs
+
+::: botbase.logs

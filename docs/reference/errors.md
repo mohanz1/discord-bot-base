@@ -1,0 +1,3 @@
+# botbase.errors
+
+::: botbase.errors

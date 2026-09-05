@@ -7,6 +7,9 @@
 [![Checked with ty](https://img.shields.io/badge/types-ty-261230)](https://github.com/astral-sh/ty)
 [![discord.py](https://img.shields.io/badge/discord.py-2.x-5865F2?logo=discord&logoColor=white)](https://github.com/Rapptz/discord.py)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-526CFE)](https://mohanz1.github.io/discord-bot-base/)
+
+**Documentation: <https://mohanz1.github.io/discord-bot-base/>**
 
 A modern, `uv`-first foundation for Discord bots. It gives you the boring-but-important parts once,
 so each new bot is just cogs and config:

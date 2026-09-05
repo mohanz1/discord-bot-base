@@ -1,0 +1,3 @@
+# botbase.extensions
+
+::: botbase.extensions

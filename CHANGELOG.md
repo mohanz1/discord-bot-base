@@ -6,6 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation site (mkdocs-material) — getting started, architecture,
+  configuration, extension guide, recipes, CLI, deployment, and an auto-generated
+  API reference. Built with `--strict` in CI and deployed to GitHub Pages on
+  push to `main`.
+- `CLAUDE.md` — repository guidance for AI agents.
+
 ### Changed
 
 - Bumped GitHub Actions to current majors (`checkout` v7, `setup-uv` v10,
