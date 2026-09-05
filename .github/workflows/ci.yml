@@ -23,6 +23,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}
       - run: uv sync --all-extras
       - run: uv run nox -s lint spelling slots
 
@@ -33,6 +34,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}
       - run: uv sync --all-extras
       - run: uv run nox -s types
 
@@ -47,6 +49,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}-${{ matrix.python-version }}
           python-version: ${{ matrix.python-version }}
       - run: uv sync --all-extras
       - run: uv run pytest
@@ -64,6 +67,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}
       - run: uv python install 3.13 3.14
       - run: uv sync --all-extras
       - run: uv run nox -s template

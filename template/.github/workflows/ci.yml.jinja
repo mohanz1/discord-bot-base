@@ -30,6 +30,7 @@ jobs:
         with:
           enable-cache: true
 {% raw -%}
+          cache-suffix: ${{ github.job }}-${{ matrix.python-version }}
           python-version: ${{ matrix.python-version }}
 {%- endraw %}
       - run: uv sync --all-extras
