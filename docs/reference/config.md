@@ -1,0 +1,3 @@
+# botbase.config
+
+::: botbase.config

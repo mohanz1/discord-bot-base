@@ -1,0 +1,3 @@
+# botbase.cog
+
+::: botbase.cog

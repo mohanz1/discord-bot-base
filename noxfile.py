@@ -16,7 +16,7 @@ from pathlib import Path
 import nox
 
 nox.options.default_venv_backend = "none"
-nox.options.sessions = ["lint", "types", "slots", "spelling", "tests"]
+nox.options.sessions = ["lint", "types", "slots", "spelling", "tests", "docs"]
 
 EXTRAS = ("--extra", "db", "--extra", "rich")
 
@@ -57,6 +57,12 @@ def slots(session: nox.Session) -> None:
 def spelling(session: nox.Session) -> None:
     """codespell."""
     _uv_run(session, "codespell")
+
+
+@nox.session
+def docs(session: nox.Session) -> None:
+    """Build the documentation site (strict — warnings fail)."""
+    _uv_run(session, "mkdocs", "build", "--strict", *session.posargs)
 
 
 @nox.session
