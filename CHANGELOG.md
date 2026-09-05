@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped GitHub Actions to current majors (`checkout` v7, `setup-uv` v10,
+  `upload-artifact` v7, `download-artifact` v8, `action-gh-release` v3,
+  `docker/*` v4/v7) and `pre-commit-hooks` to v6.
+- Expanded `.gitignore` with the common Python defaults.
+- Template CI now pins the interpreter via `setup-uv` so the 3.13/3.14 matrix
+  actually tests both.
+
 ## [0.1.0] - 2026-09-05
 
 ### Added
