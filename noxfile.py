@@ -97,12 +97,15 @@ def template(session: nox.Session) -> None:
             pyproject.write_text(
                 pyproject.read_text() + f'\n[tool.uv.sources]\ndiscord-bot-base = {{ path = "{root}" }}\n'
             )
+            # The rendered project has no lockfile yet; let `uv sync` create one
+            # even when the parent job sets UV_FROZEN=1.
+            env = {"UV_FROZEN": "0", "VIRTUAL_ENV": ""}
             session.chdir(str(dst))
-            session.run("uv", "sync", external=True)
-            session.run("uv", "run", "ruff", "check", ".", external=True)
-            session.run("uv", "run", "ruff", "format", "--check", ".", external=True)
-            session.run("uv", "run", "ty", "check", external=True)
-            session.run("uv", "run", "pytest", "-q", external=True)
+            session.run("uv", "sync", external=True, env=env)
+            session.run("uv", "run", "ruff", "check", ".", external=True, env=env)
+            session.run("uv", "run", "ruff", "format", "--check", ".", external=True, env=env)
+            session.run("uv", "run", "ty", "check", external=True, env=env)
+            session.run("uv", "run", "pytest", "-q", external=True, env=env)
         finally:
             session.chdir(str(root))
             shutil.rmtree(dst, ignore_errors=True)
