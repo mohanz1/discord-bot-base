@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+
+# ---- build: resolve deps + install the project into /app/.venv ----------------
+FROM ghcr.io/astral-sh/uv:python{{ python_floor }}-bookworm-slim AS build
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+# Dependency layer — cached until pyproject.toml / uv.lock change.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
+
+# Project layer.
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable
+
+# ---- runtime: just the venv{% if use_database %} + Alembic assets{% endif %}, non-root -----------------------
+FROM python:{{ python_floor }}-slim-bookworm AS runtime
+
+LABEL org.opencontainers.image.title="{{ project_slug }}" \
+      org.opencontainers.image.description="{{ project_name }}" \
+      org.opencontainers.image.source="https://github.com/{{ github_owner }}/{{ project_slug }}" \
+      org.opencontainers.image.licenses="MIT"
+
+RUN groupadd --system bot && useradd --system --gid bot --home /app bot
+
+WORKDIR /app
+COPY --from=build --chown=bot:bot /app/.venv /app/.venv
+{%- if use_database %}
+COPY --from=build --chown=bot:bot /app/alembic /app/alembic
+COPY --from=build --chown=bot:bot /app/alembic.ini /app/alembic.ini
+{%- endif %}
+RUN chown bot:bot /app   # let the default sqlite path work; use a volume in prod
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+USER bot
+
+# Config comes from the environment (`--env-file .env` or individual BOT_* vars).
+# `docker run <img>` starts the bot; `docker run --entrypoint botbase <img> version`
+# (or `db upgrade`, ...) for the management CLI.
+ENTRYPOINT ["{{ project_slug }}"]

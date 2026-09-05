@@ -1,0 +1,57 @@
+# {{ project_name }}
+
+A Discord bot built on [discord-bot-base](https://github.com/mohanz1/discord-bot-base).
+
+## Run it
+
+```bash
+uv sync
+cp .env.example .env      # set BOT_TOKEN
+uv run {{ project_slug }}
+```
+
+## Add a command
+
+Drop a module in `src/{{ package_import_name }}/ext/` — it is discovered and loaded
+automatically. See `ext/hello.py` for a worked example.
+
+```python
+from __future__ import annotations
+
+import discord
+from discord import app_commands
+
+from botbase.cog import BaseCog
+
+
+class Ping(BaseCog):
+    @app_commands.command(description="pong")
+    async def ping(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message("pong")
+
+
+async def setup(bot) -> None:
+    await bot.add_cog(Ping(bot))
+```
+{% if use_database %}
+## Database
+
+This project includes the SQLModel + Alembic layer. Models live in
+`src/{{ package_import_name }}/models.py`.
+
+```bash
+uv run botbase db revision -m "add a table"   # after editing models
+uv run botbase db upgrade
+```
+
+During development `BOT_DATABASE__AUTO_CREATE=true` (the default) creates missing
+tables on startup, so you can skip migrations until the schema settles.
+{% endif %}
+## Development
+
+```bash
+uv run ruff check . && uv run ruff format --check .
+uv run ty check
+uv run pytest
+uv run pre-commit install
+```

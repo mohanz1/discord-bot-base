@@ -1,0 +1,21 @@
+"""Database models for {{ project_name }}."""
+
+from __future__ import annotations
+
+import datetime as dt
+
+from sqlmodel import Field, SQLModel
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.UTC)
+
+
+class Note(SQLModel, table=True):
+    """A string key/value note."""
+
+    __tablename__ = "note"
+
+    key: str = Field(primary_key=True, max_length=255)
+    value: str
+    updated_at: dt.datetime = Field(default_factory=_utcnow)

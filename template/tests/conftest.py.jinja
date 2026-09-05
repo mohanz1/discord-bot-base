@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+import pytest
+from botbase.app import Bot
+
+from {{ package_import_name }}.config import Settings
+
+
+@pytest.fixture
+async def bot() -> Bot:
+    settings = Settings(
+        _env_file=None,
+        token=None,
+        sync_commands_on_startup=False,
+{%- if use_database %}
+        database={"url": "sqlite+aiosqlite:///:memory:"},
+{%- endif %}
+    )
+    instance = Bot(settings)
+    await instance.setup_hook()
+    yield instance
+    if not instance.is_closed():
+        await instance.close()

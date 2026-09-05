@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments
+.venv/
+.env
+.env.*
+!.env.example
+
+# Tooling caches
+.nox/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.ty_cache/
+
+# Databases
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

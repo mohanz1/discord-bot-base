@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+uv.lock linguist-generated=true
+*.mako linguist-language=Python
+CHANGELOG.md merge=union

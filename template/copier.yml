@@ -1,0 +1,50 @@
+_min_copier_version: "9.0.0"
+_templates_suffix: .jinja
+_envops:
+  keep_trailing_newline: true
+_message_after_copy: |
+  Done. Next:
+
+    cd {{ project_slug }}
+    uv sync
+    cp .env.example .env      # then set BOT_TOKEN
+    uv run {{ project_slug }}
+
+project_name:
+  type: str
+  help: Human-readable project name (e.g. "Aperture Bot")
+
+project_slug:
+  type: str
+  help: Directory and PyPI name (kebab-case)
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+
+package_import_name:
+  type: str
+  help: Python import package (snake_case)
+  default: "{{ project_slug | lower | replace('-', '_') }}"
+
+author_name:
+  type: str
+  default: Your Name
+
+author_email:
+  type: str
+  default: you@example.com
+
+github_owner:
+  type: str
+  help: GitHub user or org (used for URLs and CI badges)
+
+use_database:
+  type: bool
+  help: Include the SQLModel + Alembic database layer?
+  default: false
+
+python_floor:
+  type: str
+  help: Minimum supported Python version
+  choices:
+    - "3.13"
+    - "3.14"
+  default: "3.13"

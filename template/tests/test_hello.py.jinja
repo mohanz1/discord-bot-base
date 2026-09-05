@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+from botbase.app import Bot
+
+from {{ package_import_name }}.ext.hello import Hello
+
+
+class _Response:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, object]] = []
+        self._done = False
+
+    def is_done(self) -> bool:
+        return self._done
+
+    async def send_message(self, content: str | None = None, **kwargs: object) -> None:
+        self._done = True
+        self.messages.append({"content": content, **kwargs})
+
+
+class _User:
+    mention = "@tester"
+
+
+class _Interaction:
+    def __init__(self) -> None:
+        self.response = _Response()
+        self.user = _User()
+
+
+async def test_hello_extension_loads(bot: Bot) -> None:
+    assert bot.get_cog("Hello") is not None
+
+
+async def test_hello_greets(bot: Bot) -> None:
+    interaction = _Interaction()
+    await Hello.hello.callback(Hello(bot), interaction)
+    assert "Hello" in interaction.response.messages[0]["content"]
+{%- if use_database %}
+
+
+async def test_note_roundtrip(bot: Bot) -> None:
+    cog = Hello(bot)
+    set_it = _Interaction()
+    await Hello.note_set.callback(cog, set_it, "colour", "blue")
+    assert "Saved" in set_it.response.messages[0]["content"]
+
+    get_it = _Interaction()
+    await Hello.note_get.callback(cog, get_it, "colour")
+    assert get_it.response.messages[0]["content"] == "blue"
+{%- endif %}

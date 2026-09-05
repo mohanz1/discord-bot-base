@@ -1,0 +1,16 @@
+"""``{{ project_slug }}`` / ``python -m {{ package_import_name }}`` — start the bot."""
+
+from __future__ import annotations
+
+from botbase import run
+
+from {{ package_import_name }}.config import Settings
+
+
+def main() -> None:
+    """Entry point."""
+    run(Settings())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,28 @@
+# keep the build context (and image) small — only what `uv sync` + runtime need
+.git/
+.github/
+.venv/
+.nox/
+.ruff_cache/
+.pytest_cache/
+.ty_cache/
+**/__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-*
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# not needed at runtime
+tests/
+.editorconfig
+.pre-commit-config.yaml
+
+# never bake secrets
+.env
+.env.*
+!.env.example

@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in discord-bot-base doesn't work as documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got. Include a traceback if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest config / extension that triggers it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versions
+      description: "`discord-bot-base` version, Python version, OS."
+      placeholder: "botbase 0.1.0, Python 3.14, Linux"
+    validations:
+      required: true

@@ -1,0 +1,215 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "discord-bot-base"
+version = "0.1.0"
+description = "A modern, uv-first foundation for Discord bots: dynamic extension loading, typed config, strict tooling."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.13"
+authors = [{ name = "Zach Mohan", email = "zach.mohan01@gmail.com" }]
+keywords = ["discord", "discord.py", "bot", "framework", "base"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "discord-py>=2.6,<3",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+]
+
+[project.optional-dependencies]
+db = [
+    "sqlmodel>=0.0.22",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+]
+speedups = [
+    "discord-py[speed]>=2.6,<3",
+    "uvloop>=0.21; sys_platform != 'win32'",
+    "winloop>=0.1; sys_platform == 'win32'",
+]
+rich = ["rich>=13"]
+all = [
+    "discord-bot-base[db]",
+    "discord-bot-base[speedups]",
+    "discord-bot-base[rich]",
+]
+
+[project.scripts]
+botbase = "botbase.cli:main"
+
+[project.urls]
+Repository = "https://github.com/mohanz1/discord-bot-base"
+Issues = "https://github.com/mohanz1/discord-bot-base/issues"
+Changelog = "https://github.com/mohanz1/discord-bot-base/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "nox>=2024.4.15",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "ruff==0.16.6",
+    "ty==0.0.78",
+    "slotscheck>=0.19",
+    "codespell>=2.3",
+    "pre-commit>=3.7",
+    "copier>=9.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/botbase"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "alembic", "tests", "README.md", "LICENSE"]
+
+# --------------------------------------------------------------------------------------
+# Ruff — lint + format (replaces black, isort, flake8, pyupgrade, ...)
+# --------------------------------------------------------------------------------------
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src", "tests"]
+extend-exclude = ["template", "alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "N",           # pep8-naming
+    "D",           # pydocstyle
+    "UP",          # pyupgrade
+    "ANN",         # flake8-annotations
+    "ASYNC",       # flake8-async
+    "S",           # flake8-bandit
+    "BLE",         # flake8-blind-except
+    "B",           # flake8-bugbear
+    "A",           # flake8-builtins
+    "C4",          # flake8-comprehensions
+    "DTZ",         # flake8-datetimez
+    "EM",          # flake8-errmsg
+    "FA",          # flake8-future-annotations
+    "ISC",         # flake8-implicit-str-concat
+    "ICN",         # flake8-import-conventions
+    "G",           # flake8-logging-format
+    "PIE",         # flake8-pie
+    "PT",          # flake8-pytest-style
+    "Q",           # flake8-quotes
+    "RSE",         # flake8-raise
+    "RET",         # flake8-return
+    "SIM",         # flake8-simplify
+    "T20",         # flake8-print
+    "TID",         # flake8-tidy-imports
+    "TC",          # flake8-type-checking
+    "ARG",         # flake8-unused-arguments
+    "PTH",         # flake8-use-pathlib
+    "PL",          # pylint
+    "TRY",         # tryceratops
+    "FLY",         # flynt
+    "PERF",        # perflint
+    "FURB",        # refurb
+    "RUF",         # ruff-specific
+]
+ignore = [
+    "D203",    # one-blank-line-before-class (conflicts with D211)
+    "D213",    # multi-line-summary-second-line (conflicts with D212)
+    "COM812",  # trailing comma — handled by formatter
+    "ISC001",  # single-line implicit concat — handled by formatter
+    "TRY003",  # long messages outside exception class — EM handles the useful part
+    "PLR0913", # too many arguments — discord handlers legitimately have many
+    "PLC0415", # deliberate lazy imports (optional deps, CLI startup, cycle breaks)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "D", "ANN", "PLR2004", "SLF001", "ARG", "TC", "EM", "TRY", "BLE001"]
+"alembic/**" = ["D", "ANN", "INP001", "ERA001"]
+"src/botbase/__init__.py" = ["F401"]
+"src/botbase/app.py" = ["ANN401"]     # DB sessionmaker type is dynamic without the [db] extra
+"src/botbase/cog.py" = ["ANN401"]     # ditto
+"noxfile.py" = ["D", "ANN"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+# --------------------------------------------------------------------------------------
+# ty — Astral's type checker (beta; pinned exact in the dev group)
+# --------------------------------------------------------------------------------------
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.src]
+# The strict type gate is on the library. Tests use loose fakes/monkeypatching.
+include = ["src"]
+exclude = ["template", "alembic"]
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+redundant-cast = "error"
+
+# --------------------------------------------------------------------------------------
+# slotscheck — enforce __slots__ correctness
+# --------------------------------------------------------------------------------------
+[tool.slotscheck]
+strict-imports = true
+require-superclass = true
+require-subclass = false
+exclude-modules = "(^botbase\\.ext\\.|^botbase\\.database\\.)"
+
+# --------------------------------------------------------------------------------------
+# codespell
+# --------------------------------------------------------------------------------------
+[tool.codespell]
+skip = "*.lock,uv.lock,*.mako,./template,./.git,./.nox,./htmlcov"
+ignore-words-list = "crate,typ"
+
+# --------------------------------------------------------------------------------------
+# pytest / coverage
+# --------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config --cov=botbase --cov-report=term-missing --cov-fail-under=90"
+xfail_strict = true
+markers = [
+    "db: test needs the optional [db] extra installed",
+]
+filterwarnings = [
+    "error",
+    # Python 3.14 deprecations inside third-party libs we don't control:
+    "ignore:.*iscoroutinefunction.*:DeprecationWarning",
+    "ignore:.*AbstractEventLoopPolicy.*:DeprecationWarning",
+    "ignore:.*get_event_loop_policy.*:DeprecationWarning",
+    "ignore:.*set_event_loop_policy.*:DeprecationWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["botbase"]
+omit = ["src/botbase/__main__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "@(typing\\.)?overload",
+]

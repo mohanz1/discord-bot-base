@@ -1,0 +1,49 @@
+"""Example extension. Delete or edit freely."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import discord
+from botbase.cog import BaseCog
+from discord import app_commands
+{%- if use_database %}
+from sqlmodel import select
+
+from {{ package_import_name }}.models import Note
+{%- endif %}
+
+if TYPE_CHECKING:
+    from botbase.app import Bot
+
+
+class Hello(BaseCog):
+    """A greeting command{% if use_database %} and a tiny note store{% endif %}."""
+
+    @app_commands.command(description="Say hello.")
+    async def hello(self, interaction: discord.Interaction) -> None:
+        """Greet the caller."""
+        await interaction.response.send_message(f"Hello, {interaction.user.mention}!")
+{%- if use_database %}
+
+    @app_commands.command(name="note-set", description="Store a note by key.")
+    async def note_set(self, interaction: discord.Interaction, key: str, value: str) -> None:
+        """Upsert a note."""
+        async with self.bot.session() as session:
+            await session.merge(Note(key=key, value=value))
+            await session.commit()
+        await interaction.response.send_message(f"Saved `{key}`.", ephemeral=True)
+
+    @app_commands.command(name="note-get", description="Read a note by key.")
+    async def note_get(self, interaction: discord.Interaction, key: str) -> None:
+        """Fetch a note."""
+        async with self.bot.session() as session:
+            row = (await session.exec(select(Note).where(Note.key == key))).one_or_none()
+        message = row.value if row else f"No note for `{key}`."
+        await interaction.response.send_message(message, ephemeral=True)
+{%- endif %}
+
+
+async def setup(bot: Bot) -> None:
+    """discord.py entry point."""
+    await bot.add_cog(Hello(bot))
