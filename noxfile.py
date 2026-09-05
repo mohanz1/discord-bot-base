@@ -18,15 +18,13 @@ import nox
 nox.options.default_venv_backend = "none"
 nox.options.sessions = ["lint", "types", "slots", "spelling", "tests"]
 
-PYTHON_VERSIONS = ["3.13", "3.14"]
 EXTRAS = ("--extra", "db", "--extra", "rich")
 
 
-def _uv_run(session: nox.Session, *args: str, python: str | None = None) -> None:
-    cmd = ["uv", "run", "--frozen"]
-    if python:
-        cmd += ["--python", python]
-    session.run(*cmd, *EXTRAS, *args, external=True)
+def _uv_run(session: nox.Session, *args: str) -> None:
+    # Python version comes from the ambient uv (UV_PYTHON / .python-version);
+    # CI drives the 3.13/3.14 matrix, not nox.
+    session.run("uv", "run", "--frozen", *EXTRAS, *args, external=True)
 
 
 @nox.session
@@ -61,10 +59,10 @@ def spelling(session: nox.Session) -> None:
     _uv_run(session, "codespell")
 
 
-@nox.session(python=PYTHON_VERSIONS)
+@nox.session
 def tests(session: nox.Session) -> None:
-    """pytest with coverage, on each supported Python."""
-    _uv_run(session, "pytest", *session.posargs, python=session.python)
+    """pytest with coverage (runs on the project's Python; CI covers 3.13 + 3.14)."""
+    _uv_run(session, "pytest", *session.posargs)
 
 
 @nox.session

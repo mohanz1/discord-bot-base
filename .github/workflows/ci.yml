@@ -47,9 +47,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv python install ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
       - run: uv sync --all-extras
-      - run: uv run nox -s tests -p ${{ matrix.python-version }}
+      - run: uv run pytest
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.python-version }}
