@@ -22,6 +22,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expanded `.gitignore` with the common Python defaults.
 - Template CI now pins the interpreter via `setup-uv` so the 3.13/3.14 matrix
   actually tests both.
+- `run()` now passes uvloop / winloop to `asyncio.run(loop_factory=...)` instead
+  of calling `uvloop.install()`, which sets a global event-loop policy (deprecated
+  in Python 3.14, removed in 3.16).
+- `load_extensions(strict=True)` chains every failure onto `ExtensionLoadError` as
+  an `ExceptionGroup` `__cause__`, so each extension's traceback is printed.
+- `reload_all` reports the root cause of a failed reload (unwrapping
+  `ExtensionFailed`), matching `load_extensions`.
+- Updated the lockfile (pydantic 2.14, pydantic-settings 2.16, SQLAlchemy 2.1,
+  SQLModel 0.0.48, Alembic 1.20, uvloop 0.23, ...); `ruff` 0.17.2, `ty` 0.0.92,
+  `setup-uv` v10.3.2, `uv-pre-commit` 0.13.5 (base and template).
 
 ## [0.1.0] - 2026-09-05
 

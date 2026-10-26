@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime as dt
+import importlib
 import logging
 import signal
 import time
@@ -19,7 +20,7 @@ from botbase.logs import configure_logging
 from botbase.tree import BotTree
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, Callable
 
     from botbase.config import DatabaseSettings
 
@@ -123,7 +124,7 @@ class Bot(commands.Bot):
         return self._sessionmaker
 
     @contextlib.asynccontextmanager
-    async def session(self) -> AsyncIterator[Any]:
+    async def session(self) -> AsyncGenerator[Any]:
         """``async with bot.session() as s: ...`` — a scoped DB session."""
         async with self.db() as session:
             yield session
@@ -159,24 +160,21 @@ class Bot(commands.Bot):
             self.log.info("synced %d global command(s)", len(synced))
 
 
-def _install_fast_event_loop() -> None:
-    """Best-effort install of uvloop (POSIX) / winloop (Windows).
+def _fast_loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
+    """Return uvloop's (POSIX) / winloop's (Windows) loop factory, if installed.
 
-    Never fatal: a missing or incompatible accelerator just falls back to the
-    stdlib event loop.
+    Passed to :func:`asyncio.run` as ``loop_factory`` rather than calling
+    ``uvloop.install()``, which swaps the global event-loop policy — deprecated
+    in Python 3.14 and removed in 3.16. ``None`` means the stdlib loop.
     """
     for name in ("uvloop", "winloop"):
         try:
-            module = __import__(name)
-            module.install()
+            module = importlib.import_module(name)
         except ModuleNotFoundError:
             continue
-        except Exception as exc:  # noqa: BLE001 - accelerator is optional  # pragma: no cover
-            _log.warning("could not install %s event loop: %s", name, exc)
-            return
-        else:
-            _log.debug("using %s event loop", name)
-            return
+        _log.debug("using %s event loop", name)
+        return module.new_event_loop
+    return None
 
 
 def _request_stop(bot: Bot, sig: signal.Signals) -> None:  # pragma: no cover - signal path
@@ -188,7 +186,6 @@ def run(settings: Settings | None = None) -> None:
     """Configure logging, then connect and run the bot until interrupted."""
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_format)
-    _install_fast_event_loop()
 
     token = settings.require_token()
 
@@ -201,7 +198,7 @@ def run(settings: Settings | None = None) -> None:
             await bot.start(token)
 
     try:
-        asyncio.run(_amain())
+        asyncio.run(_amain(), loop_factory=_fast_loop_factory())
     except KeyboardInterrupt:  # pragma: no cover - interactive only
         _log.info("shutting down")
     except discord.LoginFailure:  # pragma: no cover - needs a real (bad) token

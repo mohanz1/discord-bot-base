@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import types
 
 import pytest
 from discord.ext import commands
 
-from botbase.app import Bot, _install_fast_event_loop, run
+from botbase.app import Bot, _fast_loop_factory, run
 from botbase.config import Settings
 from botbase.tree import BotTree
 
@@ -57,8 +58,7 @@ async def test_setup_hook_loads_builtin_extensions(settings: Settings) -> None:
     await bot.close()
 
 
-def test_run_requires_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("botbase.app._install_fast_event_loop", lambda: None)
+def test_run_requires_a_token() -> None:
     with pytest.raises(RuntimeError, match="No bot token"):
         run(Settings(_env_file=None, token=None))
 
@@ -119,5 +119,23 @@ async def test_on_ready_logs_and_sets_presence(
     await bot.close()
 
 
-def test_install_fast_event_loop_is_safe() -> None:
-    _install_fast_event_loop()  # must not raise regardless of what's installed
+def _fake_import(available: dict[str, object]) -> object:
+    def _import(name: str) -> object:
+        if name in available:
+            return available[name]
+        raise ModuleNotFoundError(name)
+
+    return _import
+
+
+def test_fast_loop_factory_prefers_installed_accelerator(monkeypatch: pytest.MonkeyPatch) -> None:
+    def new_event_loop() -> None: ...
+
+    winloop = types.SimpleNamespace(new_event_loop=new_event_loop)
+    monkeypatch.setattr("botbase.app.importlib.import_module", _fake_import({"winloop": winloop}))
+    assert _fast_loop_factory() is new_event_loop
+
+
+def test_fast_loop_factory_falls_back_to_stdlib(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("botbase.app.importlib.import_module", _fake_import({}))
+    assert _fast_loop_factory() is None
