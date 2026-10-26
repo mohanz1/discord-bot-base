@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from discord.ext import commands
 
 from botbase.errors import ExtensionLoadError
 from botbase.extensions import discover_extensions, load_extensions, reload_all
@@ -49,6 +50,9 @@ async def test_load_strict_raises(bot: object) -> None:
     with pytest.raises(ExtensionLoadError) as excinfo:
         await load_extensions(bot, packages=[FIXTURES], strict=True)
     assert "broken" in str(excinfo.value)
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, BaseExceptionGroup)
+    assert [type(e) for e in cause.exceptions] == [RuntimeError]
 
 
 async def test_disabled_matches_dotted_and_leaf(bot: object) -> None:
@@ -67,3 +71,16 @@ async def test_reload_all(bot: object) -> None:
     report = await reload_all(bot)
     assert f"{FIXTURES}.alpha" in report.loaded
     assert report.ok
+
+
+async def test_reload_all_unwraps_extension_failed(bot: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    await load_extensions(bot, packages=[FIXTURES], disabled=["broken"])
+    root = RuntimeError("boom")
+
+    async def failing_reload(name: str) -> None:
+        raise commands.ExtensionFailed(name, root)
+
+    monkeypatch.setattr(bot, "reload_extension", failing_reload)
+    report = await reload_all(bot)
+    assert report.failed
+    assert all(exc is root for exc in report.failed.values())

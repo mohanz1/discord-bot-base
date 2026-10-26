@@ -10,7 +10,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from botbase.config import DatabaseSettings
 
@@ -32,7 +32,7 @@ async def init_models(engine: AsyncEngine) -> None:
 
 
 @contextlib.asynccontextmanager
-async def session(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
+async def session(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession]:
     """``async with session(sm) as s: ...`` — a scoped session."""
     async with sessionmaker() as active:
         yield active
