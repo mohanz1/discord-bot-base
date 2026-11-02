@@ -4,7 +4,17 @@ import pytest
 from discord import app_commands
 
 from botbase.app import Bot
-from botbase.ext.admin import Admin, _cleanup_code, _resolve
+from botbase.ext.admin import (
+    Admin,
+    DevPanel,
+    _cleanup_code,
+    _do_load,
+    _do_sync,
+    _do_unload,
+    _ExecModal,
+    _ExtModal,
+    _resolve,
+)
 from tests.conftest import FakeInteraction
 
 FIXTURES = "tests.fixtures.extpkg"
@@ -18,6 +28,10 @@ def _last(interaction: FakeInteraction) -> str:
 def owner_bot(bot: Bot, interaction: FakeInteraction) -> Bot:
     bot.owner_id = interaction.user.id
     return bot
+
+
+def _panel(bot: Bot) -> DevPanel:
+    return DevPanel(bot, Admin(bot)._run_eval)
 
 
 # -- cleanup / resolve --------------------------------------------------------
@@ -55,25 +69,38 @@ async def test_interaction_check_blocks_others(bot: Bot, interaction: FakeIntera
         await Admin(bot).interaction_check(interaction)
 
 
-# -- reload / load / unload -----------------------------------------------------
+# -- /dev opens the panel -------------------------------------------------------
 
 
-async def test_reload_one(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await owner_bot.load_extension(f"{FIXTURES}.alpha")
-    await Admin.reload.callback(Admin(owner_bot), interaction, "alpha")
-    assert f"reloaded `{FIXTURES}.alpha`" in _last(interaction)
+async def test_dev_opens_panel(owner_bot: Bot, interaction: FakeInteraction) -> None:
+    await Admin.dev.callback(Admin(owner_bot), interaction)
+    assert isinstance(interaction.response.messages[0]["view"], DevPanel)
 
 
-async def test_reload_unknown_reports_error(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.reload.callback(Admin(owner_bot), interaction, "nope")
-    assert "could not reload" in _last(interaction)
+def test_dev_command_hidden_from_non_admins() -> None:
+    # default_permissions() with no perms -> Discord hides the command from
+    # everyone without admin in the guild.
+    perms = Admin.dev.default_permissions
+    assert perms is not None
+    assert perms.value == 0
 
 
-async def test_reload_no_arg_opens_picker(owner_bot: Bot, interaction: FakeInteraction) -> None:
+async def test_panel_gate_blocks_non_owner(bot: Bot) -> None:
+    bot.owner_id = 999
+    panel = _panel(bot)
+    inner = FakeInteraction(client=bot)
+    assert await panel.interaction_check(inner) is False
+    assert inner.response.messages[0]["content"] == "This command is owner-only."
+
+
+# -- reload picker ------------------------------------------------------------------
+
+
+async def test_panel_reload_button_opens_picker(owner_bot: Bot, interaction: FakeInteraction) -> None:
     from botbase.ext.admin import _ReloadView
 
     await owner_bot.load_extension(f"{FIXTURES}.alpha")
-    await Admin.reload.callback(Admin(owner_bot), interaction, None)
+    await _panel(owner_bot).reload.callback(interaction)
     assert isinstance(interaction.response.messages[0]["view"], _ReloadView)
 
 
@@ -117,28 +144,76 @@ async def test_reload_select_blocks_non_owner(bot: Bot) -> None:
     assert inner.response.messages[0]["content"] == "Owner only."
 
 
+# -- load / unload ----------------------------------------------------------------
+
+
 async def test_load_then_unload(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    cog = Admin(owner_bot)
-    await Admin.load.callback(cog, interaction, f"{FIXTURES}.alpha")
+    await _do_load(owner_bot, interaction, f"{FIXTURES}.alpha")
     assert "loaded" in _last(interaction)
     assert f"{FIXTURES}.alpha" in owner_bot.extensions
 
-    await Admin.unload.callback(cog, interaction, "alpha")
+    await _do_unload(owner_bot, interaction, "alpha")
     assert "unloaded" in _last(interaction)
     assert f"{FIXTURES}.alpha" not in owner_bot.extensions
 
 
 async def test_load_failure_reports_error(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.load.callback(Admin(owner_bot), interaction, f"{FIXTURES}.broken")
+    await _do_load(owner_bot, interaction, f"{FIXTURES}.broken")
     assert "could not load" in _last(interaction)
+
+
+@pytest.mark.parametrize(("button", "title"), [("load", "load"), ("unload", "unload")])
+async def test_panel_ext_buttons_open_modal(
+    owner_bot: Bot, interaction: FakeInteraction, button: str, title: str
+) -> None:
+    await getattr(_panel(owner_bot), button).callback(interaction)
+    modal = interaction.response.modals[0]
+    assert isinstance(modal, _ExtModal)
+    assert modal.title == title
+
+
+async def test_ext_modal_submit_runs(owner_bot: Bot, interaction: FakeInteraction) -> None:
+    from functools import partial
+
+    modal = _ExtModal("load", partial(_do_load, owner_bot))
+    modal.name._value = f"{FIXTURES}.alpha"  # type: ignore[attr-defined]
+    await modal.on_submit(interaction)
+    assert "loaded" in _last(interaction)
+    assert f"{FIXTURES}.alpha" in owner_bot.extensions
+
+
+async def test_panel_on_timeout_disables_buttons(owner_bot: Bot) -> None:
+    from tests.conftest import FakeMessage
+
+    panel = _panel(owner_bot)
+    panel.message = FakeMessage()  # type: ignore[assignment]
+    await panel.on_timeout()
+    assert all(child.disabled for child in panel.children)
+    assert panel.message.edits  # type: ignore[union-attr]
 
 
 # -- sync --------------------------------------------------------------------------
 
 
 async def test_sync_guild_requires_a_guild(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.sync.callback(Admin(owner_bot), interaction, "guild")
+    await _do_sync(owner_bot, interaction, "guild")
     assert "run this in a server" in _last(interaction)
+
+
+async def test_panel_sync_buttons(owner_bot: Bot, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_sync(*_a: object, **_k: object) -> list[object]:
+        return []
+
+    monkeypatch.setattr(owner_bot.tree, "sync", fake_sync)
+    panel = _panel(owner_bot)
+
+    guild_inter = FakeInteraction(client=owner_bot)
+    await panel.sync_guild.callback(guild_inter)
+    assert "run this in a server" in str(guild_inter.followup.messages[-1]["content"])
+
+    global_inter = FakeInteraction(client=owner_bot)
+    await panel.sync_global.callback(global_inter)
+    assert "global command" in str(global_inter.followup.messages[-1]["content"])
 
 
 async def test_sync_global(owner_bot: Bot, interaction: FakeInteraction, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,7 +221,7 @@ async def test_sync_global(owner_bot: Bot, interaction: FakeInteraction, monkeyp
         return []
 
     monkeypatch.setattr(owner_bot.tree, "sync", fake_sync)
-    await Admin.sync.callback(Admin(owner_bot), interaction, "global")
+    await _do_sync(owner_bot, interaction, "global")
     assert "global command" in _last(interaction)
 
 
@@ -154,31 +229,29 @@ async def test_sync_global(owner_bot: Bot, interaction: FakeInteraction, monkeyp
 
 
 async def test_exec_returns_value(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.exec_.callback(Admin(owner_bot), interaction, "return 6 * 7")
+    await Admin(owner_bot)._run_eval(interaction, "return 6 * 7")
     assert "42" in _last(interaction)
 
 
 async def test_exec_captures_stdout_and_keeps_last(owner_bot: Bot, interaction: FakeInteraction) -> None:
     cog = Admin(owner_bot)
-    await Admin.exec_.callback(cog, interaction, "print('yo')\nreturn 5")
+    await cog._run_eval(interaction, "print('yo')\nreturn 5")
     assert "yo" in _last(interaction)
     assert cog._last_eval == 5
 
 
 async def test_exec_reports_runtime_error(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.exec_.callback(Admin(owner_bot), interaction, "1 / 0")
+    await Admin(owner_bot)._run_eval(interaction, "1 / 0")
     assert "ZeroDivisionError" in _last(interaction)
 
 
 async def test_exec_reports_syntax_error(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    await Admin.exec_.callback(Admin(owner_bot), interaction, "return (")
+    await Admin(owner_bot)._run_eval(interaction, "return (")
     assert "SyntaxError" in _last(interaction)
 
 
-async def test_exec_no_code_opens_modal(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    from botbase.ext.admin import _ExecModal
-
-    await Admin.exec_.callback(Admin(owner_bot), interaction, None)
+async def test_panel_exec_button_opens_modal(owner_bot: Bot, interaction: FakeInteraction) -> None:
+    await _panel(owner_bot).exec_.callback(interaction)
     assert isinstance(interaction.response.modals[0], _ExecModal)
 
 
@@ -194,8 +267,6 @@ async def test_send_result_uses_a_file_when_long(interaction: FakeInteraction) -
 
 
 async def test_exec_modal_submit_runs(owner_bot: Bot, interaction: FakeInteraction) -> None:
-    from botbase.ext.admin import _ExecModal
-
     modal = _ExecModal(Admin(owner_bot)._run_eval)
     modal.source._value = "return 2 + 2"
     await modal.on_submit(interaction)

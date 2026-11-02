@@ -16,6 +16,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `/dev` is now a single command that opens an ephemeral owner-only panel
+  (**Reload / Load / Unload / Exec / Sync — server / Sync — global** buttons)
+  instead of the `/dev reload|load|unload|sync|exec` subcommands. It carries
+  `default_permissions()`, so Discord's command picker hides it from non-admins.
 - Bumped GitHub Actions to current majors (`checkout` v7, `setup-uv` v10,
   `upload-artifact` v7, `download-artifact` v8, `action-gh-release` v3,
   `docker/*` v4/v7) and `pre-commit-hooks` to v6.

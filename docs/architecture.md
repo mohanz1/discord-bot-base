@@ -53,7 +53,7 @@ how-to; the mechanics:
   discord.py's `ExtensionFailed`) is kept on the report. With `strict_extension_loading =
   true` a combined [`ExtensionLoadError`](reference/errors.md) is raised at the end.
 - **Reloading** — [`reload_all(bot)`](reference/extensions.md) reloads every currently
-  loaded extension; `/dev reload` exposes it at runtime.
+  loaded extension; the `/dev` panel's **Reload** button exposes it at runtime.
 
 Each extension module must expose the standard discord.py entry point:
 

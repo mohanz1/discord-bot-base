@@ -55,10 +55,11 @@ uv run botbase db upgrade                   # run migrations (needs the [db] ext
 
 ### Owner-only commands
 
-`/dev reload | load | unload | sync | exec` are visible to everyone but only runnable by an owner
-(`bot.is_owner`, checked in the cog's `interaction_check`); `/help` hides them from non-owners
-because the cog sets `owner_only = True`. Owners are the application/team owner by default, or set
-`BOT_OWNER_IDS`. `/dev exec` runs Python as the owner — disable the whole cog with
+`/dev` opens an owner-only panel — **Reload / Load / Unload / Sync / Exec** buttons — runnable only
+by an owner (`bot.is_owner`, checked in the cog's `interaction_check` and the panel's). The command
+carries `default_permissions()` so Discord's picker hides it from non-admins, and `/help` hides it
+too (`owner_only = True`). Owners are the application/team owner by default, or set `BOT_OWNER_IDS`.
+The **Exec** button runs Python as the owner — disable the whole cog with
 `BOT_DISABLED_EXTENSIONS='["admin"]'` if you'd rather not ship it.
 
 Mark your own cog owner-only the same way:

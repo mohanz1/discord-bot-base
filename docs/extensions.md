@@ -70,8 +70,8 @@ class MyCog(BaseCog):
 
 ## Reloading at runtime
 
-The owner-only `/dev reload` command reloads one extension (or all of them via the
-select menu). Programmatically:
+The owner-only `/dev` panel's **Reload** button reloads one extension (or all of
+them via the select menu). Programmatically:
 
 ```python
 from botbase.extensions import reload_all
@@ -88,7 +88,7 @@ Shipped in `botbase.ext`, loaded by default, each disable-able:
 | `meta` | `/ping`, `/about`, `/uptime` | Latency meter; `/about` has an owner-only detail view. |
 | `help` | `/help [command]` | Generated from the live tree; hides commands you can't run. |
 | `errors` | – | Global slash + prefix error handling. |
-| `admin` | `/dev reload\|load\|unload\|sync\|exec` | Owner-only (`is_owner`). `owner_only = True`. |
+| `admin` | `/dev` (panel: reload / load / unload / sync / exec) | Owner-only (`is_owner`). `owner_only = True`, `default_permissions()` hides it from the picker. |
 
 ## Owner-only cogs
 
