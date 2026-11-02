@@ -60,9 +60,12 @@ Read `docs/architecture.md` before making structural changes.
 
 ## Gotchas
 
-- **Python 3.14 + discord.py + uvloop** emit deprecation warnings
-  (`iscoroutinefunction`, `AbstractEventLoopPolicy`); `pytest` `filterwarnings` has
-  targeted ignores. Don't turn those into a blanket ignore.
+- **Python 3.14 + discord.py** emits an `asyncio.iscoroutinefunction` deprecation
+  warning; `pytest` `filterwarnings` has a targeted ignore. Don't turn it into a blanket
+  ignore.
+- **Never call `uvloop.install()`** (or set an event-loop policy) — policies are
+  deprecated in 3.14 and removed in 3.16. `run()` passes `loop_factory=` to
+  `asyncio.run` instead.
 - **`BotTree.on_error`** carries a `# ty: ignore[invalid-method-override]` — ty (beta)
   is over-strict about `self`/generic variance on this documented discord.py override.
 - **discord.py's `load_extension` swaps `sys.modules` entries** for a fresh module

@@ -22,8 +22,9 @@ class MissingDependencyError(BotBaseError):
 class ExtensionLoadError(BotBaseError):
     """One or more extensions failed to load during startup.
 
-    The individual failures are attached as ``__cause__`` on the wrapped
-    :class:`ExceptionGroup` and listed on :attr:`failures`.
+    The individual failures are listed on :attr:`failures` and, when raised by
+    :func:`~botbase.extensions.load_extensions`, chained as an
+    :class:`ExceptionGroup` ``__cause__`` so every traceback is printed.
     """
 
     def __init__(self, failures: dict[str, BaseException]) -> None:

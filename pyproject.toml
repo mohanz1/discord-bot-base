@@ -199,11 +199,8 @@ markers = [
 ]
 filterwarnings = [
     "error",
-    # Python 3.14 deprecations inside third-party libs we don't control:
+    # Python 3.14 deprecation inside discord.py (asyncio.iscoroutinefunction):
     "ignore:.*iscoroutinefunction.*:DeprecationWarning",
-    "ignore:.*AbstractEventLoopPolicy.*:DeprecationWarning",
-    "ignore:.*get_event_loop_policy.*:DeprecationWarning",
-    "ignore:.*set_event_loop_policy.*:DeprecationWarning",
 ]
 
 [tool.coverage.run]

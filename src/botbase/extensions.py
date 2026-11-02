@@ -79,6 +79,11 @@ def _is_disabled(dotted: str, disabled: Iterable[str]) -> bool:
     return dotted in disabled_set or leaf in disabled_set
 
 
+def _root_cause(exc: BaseException) -> BaseException:
+    # discord.py wraps setup() errors in ExtensionFailed; keep the root cause.
+    return getattr(exc, "original", None) or exc
+
+
 async def load_extensions(
     bot: commands.Bot,
     *,
@@ -119,14 +124,14 @@ async def load_extensions(
                 await bot.load_extension(dotted)
             except Exception as exc:  # noqa: BLE001 - deliberately aggregate every failure
                 _log.exception("failed to load extension %s", dotted)
-                # discord.py wraps setup() errors in ExtensionFailed; keep the root cause.
-                report.failed[dotted] = getattr(exc, "original", None) or exc
+                report.failed[dotted] = _root_cause(exc)
             else:
                 _log.info("loaded extension %s", dotted)
                 report.loaded.append(dotted)
 
     if report.failed and strict:
-        raise ExtensionLoadError(report.failed)
+        group = BaseExceptionGroup("extension load failures", list(report.failed.values()))
+        raise ExtensionLoadError(report.failed) from group
     return report
 
 
@@ -138,7 +143,7 @@ async def reload_all(bot: commands.Bot) -> LoadReport:
             await bot.reload_extension(name)
         except Exception as exc:  # noqa: BLE001 - aggregate, report at the end
             _log.exception("failed to reload extension %s", name)
-            report.failed[name] = exc
+            report.failed[name] = _root_cause(exc)
         else:
             report.loaded.append(name)
     return report

@@ -5,9 +5,8 @@
 ```
 run(Settings)
   ├─ configure_logging(level, format)          # text | rich | json
-  ├─ install uvloop / winloop  (best effort)
   ├─ settings.require_token()
-  └─ asyncio.run:
+  └─ asyncio.run(loop_factory=uvloop / winloop, if installed):
        async with Bot(settings):
          ├─ install SIGINT / SIGTERM -> bot.close()
          └─ bot.start(token)

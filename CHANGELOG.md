@@ -26,15 +26,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expanded `.gitignore` with the common Python defaults.
 - Template CI now pins the interpreter via `setup-uv` so the 3.13/3.14 matrix
   actually tests both.
-- Refreshed `uv.lock` to the latest compatible releases (pydantic 2.14,
-  pydantic-settings 2.16, SQLAlchemy 2.1, SQLModel 0.0.48, Alembic 1.20,
-  uvloop 0.23, pytest 9.2, ...). Bumped `ruff` to 0.17.3, `ty` to 0.0.95,
-  `uv-pre-commit` to 0.13.6 and `setup-uv` to v10.3.3 (base and template).
+- `run()` now passes uvloop / winloop to `asyncio.run(loop_factory=...)` instead
+  of calling `uvloop.install()`, which sets a global event-loop policy (deprecated
+  in Python 3.14, removed in 3.16).
+- `load_extensions(strict=True)` chains every failure onto `ExtensionLoadError` as
+  an `ExceptionGroup` `__cause__`, so each extension's traceback is printed.
+- `reload_all` reports the root cause of a failed reload (unwrapping
+  `ExtensionFailed`), matching `load_extensions`.
+- Updated the lockfile (pydantic 2.14, pydantic-settings 2.16, SQLAlchemy 2.1,
+  SQLModel 0.0.48, Alembic 1.20, uvloop 0.23, pytest 9.2, ...); `ruff` 0.17.3,
+  `ty` 0.0.95, `setup-uv` v10.3.3, `uv-pre-commit` 0.13.6 (base and template).
 - pytest config moved to the native `[tool.pytest]` table with `strict = true`
   (requires pytest ≥ 9.0), in the base and the template.
 - Template `Dockerfile` now builds on Debian trixie (`*-trixie-slim`).
-- `Bot.session` / `database.session` are annotated `AsyncGenerator` (was
-  `AsyncIterator`, deprecated for `@asynccontextmanager` functions).
 
 ### Fixed
 
