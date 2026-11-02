@@ -19,7 +19,7 @@ from botbase.logs import configure_logging
 from botbase.tree import BotTree
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from botbase.config import DatabaseSettings
 
@@ -123,7 +123,7 @@ class Bot(commands.Bot):
         return self._sessionmaker
 
     @contextlib.asynccontextmanager
-    async def session(self) -> AsyncIterator[Any]:
+    async def session(self) -> AsyncGenerator[Any]:
         """``async with bot.session() as s: ...`` — a scoped DB session."""
         async with self.db() as session:
             yield session
@@ -179,9 +179,15 @@ def _install_fast_event_loop() -> None:
             return
 
 
+# The loop only holds weak references to tasks; keep fire-and-forget ones alive.
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
 def _request_stop(bot: Bot, sig: signal.Signals) -> None:  # pragma: no cover - signal path
     _log.info("received %s, shutting down", sig.name)
-    bot.loop.create_task(bot.close())
+    task = bot.loop.create_task(bot.close())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def run(settings: Settings | None = None) -> None:

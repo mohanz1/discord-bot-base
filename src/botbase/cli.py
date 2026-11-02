@@ -42,12 +42,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_ext_list(_args: argparse.Namespace) -> int:
     from botbase.config import get_settings
-    from botbase.extensions import discover_extensions
+    from botbase.extensions import _is_disabled, discover_extensions
 
     settings = get_settings()
     for package in settings.extension_packages:
         for name in discover_extensions(package):
-            disabled = name in settings.disabled_extensions or name.rpartition(".")[2] in settings.disabled_extensions
+            disabled = _is_disabled(name, settings.disabled_extensions)
             print(f"{name}{'  (disabled)' if disabled else ''}")  # noqa: T201 - CLI output
     return 0
 

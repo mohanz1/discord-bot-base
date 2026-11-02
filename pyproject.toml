@@ -57,12 +57,12 @@ Changelog = "https://github.com/mohanz1/discord-bot-base/blob/main/CHANGELOG.md"
 [dependency-groups]
 dev = [
     "nox>=2024.4.15",
-    "pytest>=8.2",
+    "pytest>=9.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
     "pytest-mock>=3.14",
-    "ruff==0.16.6",
-    "ty==0.0.78",
+    "ruff==0.17.3",
+    "ty==0.0.95",
     "slotscheck>=0.19",
     "codespell>=2.3",
     "pre-commit>=3.7",
@@ -186,13 +186,14 @@ ignore-words-list = "crate,typ"
 # --------------------------------------------------------------------------------------
 # pytest / coverage
 # --------------------------------------------------------------------------------------
-[tool.pytest.ini_options]
+[tool.pytest]
+minversion = "9.0"
+strict = true  # strict config, markers, xfail and parametrize ids
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config --cov=botbase --cov-report=term-missing --cov-fail-under=90"
-xfail_strict = true
+addopts = ["-ra", "--cov=botbase", "--cov-report=term-missing", "--cov-fail-under=90"]
 markers = [
     "db: test needs the optional [db] extra installed",
 ]
