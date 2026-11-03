@@ -88,7 +88,7 @@ class Help(BaseCog):
     help_category = "Meta"
 
     @app_commands.command(name="help", description="List commands, or explain one in detail.")
-    @app_commands.describe(command="a command name, e.g. 'ping' or 'dev exec'")
+    @app_commands.describe(command="a command name, e.g. 'ping' or 'dev'")
     async def help_cmd(self, interaction: discord.Interaction, command: str | None = None) -> None:
         """Show every usable command, or the details of one."""
         if command:

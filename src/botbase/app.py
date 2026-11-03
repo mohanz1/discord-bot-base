@@ -177,9 +177,15 @@ def _fast_loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
     return None
 
 
+# The loop only holds weak references to tasks; keep fire-and-forget ones alive.
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
 def _request_stop(bot: Bot, sig: signal.Signals) -> None:  # pragma: no cover - signal path
     _log.info("received %s, shutting down", sig.name)
-    bot.loop.create_task(bot.close())
+    task = bot.loop.create_task(bot.close())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def run(settings: Settings | None = None) -> None:

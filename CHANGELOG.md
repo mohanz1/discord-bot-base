@@ -16,6 +16,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `/dev` is now a single command that opens an ephemeral owner-only panel
+  (**Reload / Load / Unload / Exec / Sync — server / Sync — global** buttons)
+  instead of the `/dev reload|load|unload|sync|exec` subcommands. It carries
+  `default_permissions()`, so Discord's command picker hides it from non-admins.
 - Bumped GitHub Actions to current majors (`checkout` v7, `setup-uv` v10,
   `upload-artifact` v7, `download-artifact` v8, `action-gh-release` v3,
   `docker/*` v4/v7) and `pre-commit-hooks` to v6.
@@ -30,8 +34,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `reload_all` reports the root cause of a failed reload (unwrapping
   `ExtensionFailed`), matching `load_extensions`.
 - Updated the lockfile (pydantic 2.14, pydantic-settings 2.16, SQLAlchemy 2.1,
-  SQLModel 0.0.48, Alembic 1.20, uvloop 0.23, ...); `ruff` 0.17.2, `ty` 0.0.92,
-  `setup-uv` v10.3.2, `uv-pre-commit` 0.13.5 (base and template).
+  SQLModel 0.0.48, Alembic 1.20, uvloop 0.23, pytest 9.2, ...); `ruff` 0.17.3,
+  `ty` 0.0.95, `setup-uv` v10.3.3, `uv-pre-commit` 0.13.6 (base and template).
+- pytest config moved to the native `[tool.pytest]` table with `strict = true`
+  (requires pytest ≥ 9.0), in the base and the template.
+- Template `Dockerfile` now builds on Debian trixie (`*-trixie-slim`).
+
+### Fixed
+
+- The SIGINT/SIGTERM shutdown task is now kept referenced so it can't be
+  garbage-collected before `Bot.close()` finishes.
 
 ## [0.1.0] - 2026-09-05
 

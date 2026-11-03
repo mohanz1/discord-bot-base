@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: resolve deps + install the project into /app/.venv ----------------
-FROM ghcr.io/astral-sh/uv:python{{ python_floor }}-bookworm-slim AS build
+FROM ghcr.io/astral-sh/uv:python{{ python_floor }}-trixie-slim AS build
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
 # ---- runtime: just the venv{% if use_database %} + Alembic assets{% endif %}, non-root -----------------------
-FROM python:{{ python_floor }}-slim-bookworm AS runtime
+FROM python:{{ python_floor }}-slim-trixie AS runtime
 
 LABEL org.opencontainers.image.title="{{ project_slug }}" \
       org.opencontainers.image.description="{{ project_name }}" \

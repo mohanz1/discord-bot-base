@@ -1,13 +1,15 @@
-"""Owner-only maintenance commands: ``/dev reload|load|unload|sync|exec``.
+"""Owner-only maintenance behind ``/dev`` — one panel of reload, load, unload, sync and exec.
 
-``/dev exec`` runs arbitrary Python **as the bot owner** — it is gated by
-:meth:`Bot.is_owner` on every path (the cog check *and* the runner itself).
-Disable the whole cog with ``BOT_DISABLED_EXTENSIONS='["admin"]'`` if you would
-rather not ship it.
+The panel's **Exec** button (like the old ``/dev exec``) runs arbitrary Python
+**as the bot owner** — gated by :meth:`Bot.is_owner` on every path: the cog
+check, the panel's ``interaction_check``, and the runner itself. Disable the
+whole cog with ``BOT_DISABLED_EXTENSIONS='["admin"]'`` if you would rather not
+ship it.
 
-``/dev`` is a normal global command — anyone can see it, but only the bot owner
-(or ``BOT_OWNER_IDS``) can run it; ``/help`` hides it from everyone else via the
-cog's ``owner_only`` flag.
+``/dev`` carries ``default_permissions`` of *nothing*, so Discord's command
+picker hides it from everyone without admin in the guild; ``/help`` hides it too
+via the cog's ``owner_only`` flag. To pin it to a single user, add a command
+override in *Server Settings -> Integrations* (Discord offers no API for that).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import contextlib
 import io
 import textwrap
 import traceback
+from functools import partial
 from typing import TYPE_CHECKING, Literal, cast
 
 import discord
@@ -32,6 +35,11 @@ if TYPE_CHECKING:
 
 _MAX_BLOCK = 1990
 _RELOAD_ALL = "\N{GLOBE WITH MERIDIANS}"
+_E_RELOAD = "\N{ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS}"
+_E_LOAD = "\N{INBOX TRAY}"
+_E_UNLOAD = "\N{OUTBOX TRAY}"
+_E_EXEC = "\N{SNAKE}"
+_E_SYNC = "\N{CLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS}"
 
 
 async def _reload_named(bot: Bot, names: list[str]) -> LoadReport:
@@ -76,8 +84,56 @@ def _resolve(bot: Bot, name: str) -> str:
     return name  # let discord.py raise a clear error
 
 
+# -- extension / sync actions (module-level so the panel and the tests share them) --
+
+
+async def _do_load(bot: Bot, interaction: discord.Interaction, name: str) -> None:
+    """Load a not-yet-loaded extension and report the outcome."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    resolved = _resolve(bot, name)
+    try:
+        await bot.load_extension(resolved)
+    except commands.ExtensionError as exc:
+        await interaction.followup.send(f"could not load `{resolved}`: {exc}", ephemeral=True)
+    else:
+        await interaction.followup.send(f"loaded `{resolved}`", ephemeral=True)
+
+
+async def _do_unload(bot: Bot, interaction: discord.Interaction, name: str) -> None:
+    """Unload a loaded extension and report the outcome."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    resolved = _resolve(bot, name)
+    try:
+        await bot.unload_extension(resolved)
+    except commands.ExtensionError as exc:
+        await interaction.followup.send(f"could not unload `{resolved}`: {exc}", ephemeral=True)
+    else:
+        await interaction.followup.send(f"unloaded `{resolved}`", ephemeral=True)
+
+
+async def _do_sync(bot: Bot, interaction: discord.Interaction, scope: Literal["guild", "global"]) -> None:
+    """Push the current command tree to this server (instant) or globally (slow)."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    if scope == "guild":
+        if interaction.guild is None:
+            await interaction.followup.send("run this in a server for guild scope", ephemeral=True)
+            return
+        bot.tree.copy_global_to(guild=interaction.guild)
+        synced = await bot.tree.sync(guild=interaction.guild)
+        await interaction.followup.send(f"synced {len(synced)} command(s) to this server", ephemeral=True)
+    else:
+        synced = await bot.tree.sync()
+        await interaction.followup.send(f"synced {len(synced)} global command(s)", ephemeral=True)
+
+
+# -- modals -------------------------------------------------------------------------
+
+
 class _ExecModal(discord.ui.Modal, title="exec"):
-    """A multi-line text box for ``/dev exec`` when called with no ``code``."""
+    """A multi-line text box for the panel's **Exec** button."""
 
     source: discord.ui.TextInput = discord.ui.TextInput(
         label="Python",
@@ -94,6 +150,32 @@ class _ExecModal(discord.ui.Modal, title="exec"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Run the submitted source."""
         await self._runner(interaction, self.source.value)
+
+
+class _ExtModal(discord.ui.Modal):
+    """A one-line extension-name box for the **Load** / **Unload** buttons."""
+
+    name: discord.ui.TextInput = discord.ui.TextInput(
+        label="Extension",
+        placeholder="meta    ·    botbase.ext.meta",
+        required=True,
+        max_length=200,
+    )
+
+    def __init__(
+        self,
+        op: Literal["load", "unload"],
+        runner: Callable[[discord.Interaction, str], Awaitable[None]],
+    ) -> None:
+        super().__init__(title=op)
+        self._runner = runner
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Run the load / unload with the typed name."""
+        await self._runner(interaction, self.name.value)
+
+
+# -- reload picker ----------------------------------------------------------------
 
 
 class _ReloadSelect(discord.ui.Select["_ReloadView"]):
@@ -130,18 +212,86 @@ class _ReloadSelect(discord.ui.Select["_ReloadView"]):
 
 
 class _ReloadView(discord.ui.View):
-    """Ephemeral picker shown by ``/dev reload`` with no argument."""
+    """Ephemeral picker opened by the panel's **Reload** button."""
 
     def __init__(self, bot: Bot) -> None:
         super().__init__(timeout=120)
         self.add_item(_ReloadSelect(bot))
 
 
+# -- the panel ------------------------------------------------------------------------
+
+
+def _panel_embed() -> discord.Embed:
+    return discord.Embed(
+        title="Dev tools",
+        description="Owner-only maintenance — reload, load / unload, sync, exec.",
+        colour=discord.Colour.blurple(),
+    )
+
+
+class DevPanel(discord.ui.View):
+    """Ephemeral, owner-only launcher shown by ``/dev``."""
+
+    def __init__(self, bot: Bot, eval_runner: Callable[[discord.Interaction, str], Awaitable[None]]) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self._eval_runner = eval_runner
+        self.message: discord.Message | None = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Gate every button to the bot owner(s)."""
+        if await self.bot.is_owner(interaction.user):  # ty: ignore[invalid-argument-type]
+            return True
+        await interaction.response.send_message("This command is owner-only.", ephemeral=True)
+        return False
+
+    async def on_timeout(self) -> None:
+        """Disable every button when the panel expires."""
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        if self.message is not None:
+            with contextlib.suppress(discord.HTTPException):
+                await self.message.edit(view=self)
+
+    @discord.ui.button(label="Reload", style=discord.ButtonStyle.primary, emoji=_E_RELOAD)
+    async def reload(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Open the extension-reload picker."""
+        await interaction.response.send_message(
+            "pick extensions to reload:", view=_ReloadView(self.bot), ephemeral=True
+        )
+
+    @discord.ui.button(label="Load", style=discord.ButtonStyle.secondary, emoji=_E_LOAD)
+    async def load(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Prompt for an extension to load."""
+        await interaction.response.send_modal(_ExtModal("load", partial(_do_load, self.bot)))
+
+    @discord.ui.button(label="Unload", style=discord.ButtonStyle.secondary, emoji=_E_UNLOAD)
+    async def unload(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Prompt for an extension to unload."""
+        await interaction.response.send_modal(_ExtModal("unload", partial(_do_unload, self.bot)))
+
+    @discord.ui.button(label="Exec", style=discord.ButtonStyle.danger, emoji=_E_EXEC)
+    async def exec_(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Open the Python editor."""
+        await interaction.response.send_modal(_ExecModal(self._eval_runner))
+
+    @discord.ui.button(label="Sync — server", style=discord.ButtonStyle.secondary, emoji=_E_SYNC, row=1)
+    async def sync_guild(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Sync the command tree to this server."""
+        await _do_sync(self.bot, interaction, "guild")
+
+    @discord.ui.button(label="Sync — global", style=discord.ButtonStyle.secondary, emoji=_RELOAD_ALL, row=1)
+    async def sync_global(self, interaction: discord.Interaction, _button: discord.ui.Button[DevPanel]) -> None:
+        """Sync the command tree globally."""
+        await _do_sync(self.bot, interaction, "global")
+
+
 class Admin(BaseCog):
-    """Owner-only extension management and a Python eval."""
+    """Owner-only extension management and a Python eval, behind ``/dev``."""
 
     owner_only = True
-    dev = app_commands.Group(name="dev", description="Owner-only maintenance.")
 
     def __init__(self, bot: Bot) -> None:
         super().__init__(bot)
@@ -154,82 +304,15 @@ class Admin(BaseCog):
         msg = "This command is owner-only."
         raise app_commands.CheckFailure(msg)
 
-    # -- extension management --------------------------------------------------
-
-    @dev.command(name="reload", description="Reload an extension, or pick from a menu if omitted.")
-    @app_commands.describe(extension="dotted path or leaf name; omit to open a picker")
-    async def reload(self, interaction: discord.Interaction, extension: str | None = None) -> None:
-        """Hot-reload extensions without restarting the bot."""
-        if extension is None:
-            await interaction.response.send_message(
-                "pick extensions to reload:",
-                view=_ReloadView(self.bot),
-                ephemeral=True,
-            )
-            return
-        await interaction.response.defer(ephemeral=True)
-        name = _resolve(self.bot, extension)
-        try:
-            await self.bot.reload_extension(name)
-        except commands.ExtensionError as exc:
-            await interaction.followup.send(f"could not reload `{name}`: {exc}", ephemeral=True)
-        else:
-            await interaction.followup.send(f"reloaded `{name}`", ephemeral=True)
-
-    @dev.command(name="load", description="Load an extension.")
-    async def load(self, interaction: discord.Interaction, extension: str) -> None:
-        """Load a not-yet-loaded extension."""
-        await interaction.response.defer(ephemeral=True)
-        name = _resolve(self.bot, extension)
-        try:
-            await self.bot.load_extension(name)
-        except commands.ExtensionError as exc:
-            await interaction.followup.send(f"could not load `{name}`: {exc}", ephemeral=True)
-        else:
-            await interaction.followup.send(f"loaded `{name}`", ephemeral=True)
-
-    @dev.command(name="unload", description="Unload an extension.")
-    async def unload(self, interaction: discord.Interaction, extension: str) -> None:
-        """Unload a loaded extension."""
-        await interaction.response.defer(ephemeral=True)
-        name = _resolve(self.bot, extension)
-        try:
-            await self.bot.unload_extension(name)
-        except commands.ExtensionError as exc:
-            await interaction.followup.send(f"could not unload `{name}`: {exc}", ephemeral=True)
-        else:
-            await interaction.followup.send(f"unloaded `{name}`", ephemeral=True)
-
-    @dev.command(name="sync", description="Re-sync application commands.")
-    @app_commands.describe(scope="'guild' (this server, instant) or 'global' (slow propagation)")
-    async def sync(
-        self,
-        interaction: discord.Interaction,
-        scope: Literal["guild", "global"] = "guild",
-    ) -> None:
-        """Push the current command tree to Discord."""
-        await interaction.response.defer(ephemeral=True)
-        if scope == "guild":
-            if interaction.guild is None:
-                await interaction.followup.send("run this in a server for guild scope", ephemeral=True)
-                return
-            self.bot.tree.copy_global_to(guild=interaction.guild)
-            synced = await self.bot.tree.sync(guild=interaction.guild)
-            await interaction.followup.send(f"synced {len(synced)} command(s) to this server", ephemeral=True)
-        else:
-            synced = await self.bot.tree.sync()
-            await interaction.followup.send(f"synced {len(synced)} global command(s)", ephemeral=True)
+    @app_commands.command(name="dev", description="Owner-only maintenance tools.")
+    @app_commands.default_permissions()
+    async def dev(self, interaction: discord.Interaction) -> None:
+        """Open the owner maintenance panel."""
+        panel = DevPanel(self.bot, self._run_eval)
+        await interaction.response.send_message(embed=_panel_embed(), view=panel, ephemeral=True)
+        panel.message = await interaction.original_response()
 
     # -- eval ---------------------------------------------------------------------
-
-    @dev.command(name="exec", description="Execute Python as the bot owner.")
-    @app_commands.describe(code="Python source; omit to open a multi-line editor")
-    async def exec_(self, interaction: discord.Interaction, code: str | None = None) -> None:
-        """Run Python. With no ``code`` argument, open a modal editor."""
-        if code is None:
-            await interaction.response.send_modal(_ExecModal(self._run_eval))
-            return
-        await self._run_eval(interaction, code)
 
     async def _run_eval(self, interaction: discord.Interaction, raw: str) -> None:
         if not await self.bot.is_owner(interaction.user):  # ty: ignore[invalid-argument-type]
