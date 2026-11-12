@@ -35,8 +35,7 @@ class BotTree(app_commands.CommandTree):
         """
         return True
 
-    # ty (beta) flags this documented discord.py override on `self`/generic variance.
-    async def on_error(  # ty: ignore[invalid-method-override]
+    async def on_error(
         self,
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,

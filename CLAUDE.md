@@ -66,8 +66,6 @@ Read `docs/architecture.md` before making structural changes.
 - **Never call `uvloop.install()`** (or set an event-loop policy) — policies are
   deprecated in 3.14 and removed in 3.16. `run()` passes `loop_factory=` to
   `asyncio.run` instead.
-- **`BotTree.on_error`** carries a `# ty: ignore[invalid-method-override]` — ty (beta)
-  is over-strict about `self`/generic variance on this documented discord.py override.
 - **discord.py's `load_extension` swaps `sys.modules` entries** for a fresh module
   object. `tests/conftest.py` has a `_stable_ext_modules` autouse fixture that restores
   them so `isinstance` checks stay valid across tests.
