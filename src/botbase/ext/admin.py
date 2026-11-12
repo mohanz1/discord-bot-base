@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import logging
 import textwrap
 import traceback
 from functools import partial
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from botbase.app import Bot
+
+_log = logging.getLogger("botbase.ext.admin")
 
 _MAX_BLOCK = 1990
 _RELOAD_ALL = "\N{GLOBE WITH MERIDIANS}"
@@ -63,6 +66,10 @@ def _summarise(report: LoadReport) -> str:
         names = ", ".join(f"`{n}`" for n in report.failed)
         summary += f" · **{len(report.failed)} failed**: {names}"
     return summary
+
+
+def _who(interaction: discord.Interaction) -> str:
+    return f"{interaction.user} ({interaction.user.id})"
 
 
 def _cleanup_code(content: str) -> str:
@@ -98,8 +105,10 @@ async def _do_load(bot: Bot, interaction: discord.Interaction, name: str) -> Non
     try:
         await bot.load_extension(resolved)
     except commands.ExtensionError as exc:
+        _log.warning("/dev load %s by %s failed: %s", resolved, _who(interaction), exc)
         await interaction.followup.send(f"could not load `{resolved}`: {exc}", ephemeral=True)
     else:
+        _log.info("/dev load %s by %s", resolved, _who(interaction))
         await interaction.followup.send(f"loaded `{resolved}`", ephemeral=True)
 
 
@@ -111,8 +120,10 @@ async def _do_unload(bot: Bot, interaction: discord.Interaction, name: str) -> N
     try:
         await bot.unload_extension(resolved)
     except commands.ExtensionError as exc:
+        _log.warning("/dev unload %s by %s failed: %s", resolved, _who(interaction), exc)
         await interaction.followup.send(f"could not unload `{resolved}`: {exc}", ephemeral=True)
     else:
+        _log.info("/dev unload %s by %s", resolved, _who(interaction))
         await interaction.followup.send(f"unloaded `{resolved}`", ephemeral=True)
 
 
@@ -126,9 +137,11 @@ async def _do_sync(bot: Bot, interaction: discord.Interaction, scope: Literal["g
             return
         bot.tree.copy_global_to(guild=interaction.guild)
         synced = await bot.tree.sync(guild=interaction.guild)
+        _log.info("/dev sync guild %s by %s: %d command(s)", interaction.guild.id, _who(interaction), len(synced))
         await interaction.followup.send(f"synced {len(synced)} command(s) to this server", ephemeral=True)
     else:
         synced = await bot.tree.sync()
+        _log.info("/dev sync global by %s: %d command(s)", _who(interaction), len(synced))
         await interaction.followup.send(f"synced {len(synced)} global command(s)", ephemeral=True)
 
 
@@ -210,6 +223,15 @@ class _ReloadSelect(discord.ui.Select["_ReloadView"]):
             report = await reload_all(self._bot)
         else:
             report = await _reload_named(self._bot, self.values)
+        if report.failed:
+            _log.warning(
+                "/dev reload by %s: %s; failed %s",
+                _who(interaction),
+                report.loaded,
+                {name: str(exc) for name, exc in report.failed.items()},
+            )
+        else:
+            _log.info("/dev reload by %s: %s", _who(interaction), report.loaded)
         self.disabled = True
         await interaction.response.edit_message(content=_summarise(report), view=self.view)
 
@@ -335,10 +357,14 @@ class Admin(BaseCog):
             "author": interaction.user,
             "_": self._last_eval,
         }
-        wrapped = "async def __evalfunc__():\n" + textwrap.indent(_cleanup_code(raw), "    ")
+        code = _cleanup_code(raw)
+        # Audit that it ran — never the source or the output, either can hold secrets.
+        _log.warning("/dev exec by %s: %d line(s)", _who(interaction), code.count("\n") + 1)
+        wrapped = "async def __evalfunc__():\n" + textwrap.indent(code, "    ")
         try:
             exec(wrapped, env)  # noqa: S102 - owner-gated debug tooling, by design
         except SyntaxError:
+            _log.info("/dev exec by %s: SyntaxError", _who(interaction))
             await self._send_result(interaction, traceback.format_exc())
             return
 
@@ -347,7 +373,8 @@ class Admin(BaseCog):
         try:
             with contextlib.redirect_stdout(stdout):
                 result = await func()
-        except Exception:  # noqa: BLE001 - surface every error to the owner
+        except Exception as exc:  # noqa: BLE001 - surface every error to the owner
+            _log.info("/dev exec by %s: raised %s", _who(interaction), type(exc).__name__)
             await self._send_result(interaction, stdout.getvalue() + traceback.format_exc())
             return
 

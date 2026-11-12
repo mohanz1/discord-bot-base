@@ -127,24 +127,30 @@ def _build_about_embed(bot: Bot, *, owner: bool) -> discord.Embed:
             ("gc gen counts", " / ".join(str(n) for n in gc.get_count())),
         ):
             embed.add_field(name=field_name, value=value)
-        embed.set_footer(text="extended stats shown to the bot owner only")
+        embed.set_footer(text="extended stats \N{EM DASH} only you can see this")
 
     embed.timestamp = discord.utils.utcnow()
     return embed
 
 
-async def refresh_about(interaction: discord.Interaction, view: discord.ui.View) -> None:
-    """Rebuild the ``/about`` embed with current numbers and edit the message."""
+async def refresh_about(interaction: discord.Interaction, view: _AboutView) -> None:
+    """Rebuild the ``/about`` embed with current numbers and edit the message.
+
+    The card keeps the audience it was sent with — ``view.owner`` — not the clicker's:
+    a public card stays public even when the owner refreshes it, and the owner's own
+    card is ephemeral, so nobody else can reach its Refresh button.
+    """
     bot = cast("Bot", interaction.client)
-    owner = await bot.is_owner(interaction.user)  # ty: ignore[invalid-argument-type]
-    await interaction.response.edit_message(embed=_build_about_embed(bot, owner=owner), view=view)
+    await interaction.response.edit_message(embed=_build_about_embed(bot, owner=view.owner), view=view)
 
 
 class _AboutView(discord.ui.View):
     """A ``/about`` embed with a live Refresh button (times out after 2 min)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, owner: bool = False) -> None:
         super().__init__(timeout=120)
+        self.owner = owner
+        """Whether this card shows the owner-only stats (and so was sent ephemerally)."""
         self.message: discord.Message | None = None
 
     @discord.ui.button(label="Refresh", emoji="\N{ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS}")
@@ -203,11 +209,15 @@ class Meta(BaseCog):
 
     @app_commands.command(name="about", description="Build and runtime info.")
     async def about(self, interaction: discord.Interaction) -> None:
-        """Report build info publicly; infra + reach stats only to the bot owner."""
+        """Report build info publicly; the owner's copy adds infra + reach stats, privately."""
         bot: Bot = self.bot
         owner = await bot.is_owner(interaction.user)  # ty: ignore[invalid-argument-type]
-        view = _AboutView()
-        await interaction.response.send_message(embed=_build_about_embed(bot, owner=owner), view=view)
+        view = _AboutView(owner=owner)
+        await interaction.response.send_message(
+            embed=_build_about_embed(bot, owner=owner),
+            view=view,
+            ephemeral=owner,  # host / memory / pid never land in a channel
+        )
         view.message = await interaction.original_response()
 
     @app_commands.command(name="uptime", description="How long the bot has been running.")
