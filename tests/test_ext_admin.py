@@ -282,3 +282,36 @@ async def test_exec_modal_submit_runs(owner_bot: Bot, interaction: FakeInteracti
     modal.source._value = "return 2 + 2"
     await modal.on_submit(interaction)
     assert "4" in _last(interaction)
+
+
+# -- audit log ----------------------------------------------------------------------
+
+
+async def test_dev_actions_are_audited(
+    owner_bot: Bot, interaction: FakeInteraction, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="botbase.ext.admin")
+    await _do_load(owner_bot, interaction, f"{FIXTURES}.alpha")
+    await _do_unload(owner_bot, interaction, "alpha")
+    await _do_load(owner_bot, interaction, f"{FIXTURES}.broken")
+    lines = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "botbase.ext.admin"]
+    who = f"({interaction.user.id})"
+    assert any(lvl == "INFO" and m.startswith(f"/dev load {FIXTURES}.alpha by ") and who in m for lvl, m in lines)
+    assert any(lvl == "INFO" and m.startswith(f"/dev unload {FIXTURES}.alpha by ") for lvl, m in lines)
+    assert any(
+        lvl == "WARNING" and m.startswith(f"/dev load {FIXTURES}.broken by ") and "failed" in m for lvl, m in lines
+    )
+
+
+async def test_exec_is_audited_without_source_or_output(
+    owner_bot: Bot, interaction: FakeInteraction, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="botbase.ext.admin")
+    await Admin(owner_bot)._run_eval(interaction, "secret = 'hunter2'\nreturn secret")
+    await Admin(owner_bot)._run_eval(interaction, "1 / 0")
+    text = "\n".join(r.getMessage() for r in caplog.records if r.name == "botbase.ext.admin")
+    assert "/dev exec by" in text
+    assert "2 line(s)" in text
+    assert "raised ZeroDivisionError" in text
+    assert "hunter2" not in text
+    assert any(r.levelname == "WARNING" for r in caplog.records if r.name == "botbase.ext.admin")

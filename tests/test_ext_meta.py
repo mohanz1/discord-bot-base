@@ -53,27 +53,37 @@ def test_about_embed_owner_view_adds_infra(bot: Bot) -> None:
     assert {"host", "memory", "process", "guilds", "gc gen counts"} <= names
 
 
-async def test_about_command_sends_embed_and_view(bot: Bot, interaction: FakeInteraction) -> None:
+async def test_about_command_owner_copy_is_ephemeral(bot: Bot, interaction: FakeInteraction) -> None:
     bot.owner_id = interaction.user.id
     await Meta.about.callback(Meta(bot), interaction)
     message = interaction.response.messages[0]
-    assert message["embed"].fields
+    assert {f.name for f in message["embed"].fields} >= {"host", "memory", "process"}
+    assert message["ephemeral"] is True
     assert isinstance(message["view"], _AboutView)
+    assert message["view"].owner is True
 
 
-async def test_refresh_about_rerenders_with_owner_gate(bot: Bot) -> None:
-    bot.owner_id = 1  # matches FakeInteraction default user id
+async def test_about_command_member_copy_is_public_and_trimmed(bot: Bot, interaction: FakeInteraction) -> None:
+    bot.owner_id = 424242
+    await Meta.about.callback(Meta(bot), interaction)
+    message = interaction.response.messages[0]
+    assert {f.name for f in message["embed"].fields} == _PUBLIC_FIELDS
+    assert message["ephemeral"] is False
+    assert message["view"].owner is False
+
+
+async def test_refresh_owner_card_keeps_extended_stats(bot: Bot) -> None:
     inner = FakeInteraction(client=bot)
-    await refresh_about(inner, _AboutView())
+    await refresh_about(inner, _AboutView(owner=True))
     payload = inner.response.messages[0]
     assert payload["edit_message"] is True
     assert {f.name for f in payload["embed"].fields} >= {"host", "guilds"}
 
 
-async def test_refresh_about_non_owner_gets_public_only(bot: Bot) -> None:
-    bot.owner_id = 424242
+async def test_refresh_public_card_by_owner_stays_public(bot: Bot) -> None:
+    bot.owner_id = 1  # the clicker IS the owner — a public card must still not gain infra stats
     inner = FakeInteraction(client=bot)
-    await refresh_about(inner, _AboutView())
+    await refresh_about(inner, _AboutView(owner=False))
     names = {f.name for f in inner.response.messages[0]["embed"].fields}
     assert names == _PUBLIC_FIELDS
 
