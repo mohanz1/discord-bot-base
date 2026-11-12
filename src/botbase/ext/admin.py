@@ -80,7 +80,8 @@ def _resolve(bot: Bot, name: str) -> str:
         if loaded.rpartition(".")[2] == name:
             return loaded
     for package in bot.settings.extension_packages:
-        for dotted in discover_extensions(package):
+        # A package that fails to import just can't match; don't let it break the lookup.
+        for dotted in discover_extensions(package, on_error=lambda _name, _exc: None):
             if name in (dotted, dotted.rpartition(".")[2]):
                 return dotted
     return name  # let discord.py raise a clear error

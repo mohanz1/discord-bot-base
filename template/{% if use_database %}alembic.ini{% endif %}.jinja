@@ -1,7 +1,8 @@
 [alembic]
 script_location = alembic
 prepend_sys_path = .
-version_path_separator = os
+path_separator = os
+# Placeholder: alembic/env.py uses the bot's own database URL (Settings / .env).
 sqlalchemy.url = sqlite+aiosqlite:///{{ package_import_name }}.sqlite3
 
 [loggers]

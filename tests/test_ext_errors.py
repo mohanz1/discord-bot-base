@@ -69,9 +69,26 @@ async def test_followup_used_when_response_already_done(bot: Bot, interaction: F
     assert interaction.followup.messages[0]["content"] == "nope"
 
 
+class _FakePrefixCommand:
+    def __init__(self, *, has_handler: bool = False) -> None:
+        self._has_handler = has_handler
+
+    def has_error_handler(self) -> bool:
+        return self._has_handler
+
+    def __str__(self) -> str:
+        return "demo"
+
+
+class _FakeCog:
+    def has_error_handler(self) -> bool:
+        return True
+
+
 class _FakeCtx:
-    def __init__(self) -> None:
-        self.command = "demo"
+    def __init__(self, *, command: object | None = None, cog: object | None = None) -> None:
+        self.command = command if command is not None else _FakePrefixCommand()
+        self.cog = cog
         self.sent: list[str] = []
 
     async def send(self, content: str) -> None:
@@ -97,3 +114,17 @@ async def test_prefix_unknown_error_is_generic(bot: Bot) -> None:
     ctx = _FakeCtx()
     await cog.on_command_error(ctx, commands.CommandError("kaboom"))  # type: ignore[arg-type]
     assert "went wrong" in ctx.sent[0]
+
+
+async def test_prefix_error_skipped_when_command_has_own_handler(bot: Bot) -> None:
+    cog = ErrorHandler(bot)
+    ctx = _FakeCtx(command=_FakePrefixCommand(has_handler=True))
+    await cog.on_command_error(ctx, commands.BadArgument("handled locally"))  # type: ignore[arg-type]
+    assert ctx.sent == []
+
+
+async def test_prefix_error_skipped_when_cog_has_own_handler(bot: Bot) -> None:
+    cog = ErrorHandler(bot)
+    ctx = _FakeCtx(cog=_FakeCog())
+    await cog.on_command_error(ctx, commands.CommandError("handled by cog"))  # type: ignore[arg-type]
+    assert ctx.sent == []

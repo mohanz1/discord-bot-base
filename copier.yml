@@ -1,4 +1,7 @@
+# Copier config for `copier copy gh:mohanz1/discord-bot-base <dst>`. It lives at the
+# repo root (copier only reads it from there); the template itself is template/.
 _min_copier_version: "9.0.0"
+_subdirectory: template
 _templates_suffix: .jinja
 _envops:
   keep_trailing_newline: true

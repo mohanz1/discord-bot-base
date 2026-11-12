@@ -1,12 +1,15 @@
 """Project settings.
 
 Extends the base :class:`Settings` so this bot's extension package is loaded by
-default. Every field is still overridable from the environment.
+default{% if use_database %} and the database layer is on{% endif %}. Every field is still overridable from the environment.
 """
 
 from __future__ import annotations
 
 from botbase import Settings as BaseSettings
+{%- if use_database %}
+from botbase.config import DatabaseSettings
+{%- endif %}
 from pydantic import Field
 
 
@@ -16,3 +19,6 @@ class Settings(BaseSettings):
     extension_packages: list[str] = Field(
         default_factory=lambda: ["botbase.ext", "{{ package_import_name }}.ext"],
     )
+{%- if use_database %}
+    database: DatabaseSettings | None = Field(default_factory=DatabaseSettings)
+{%- endif %}

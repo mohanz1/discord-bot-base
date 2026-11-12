@@ -9,6 +9,18 @@ botbase [run | version | sync | ext list | db ...]
 
 With no arguments, prints the version table (same as `botbase version`).
 
+## Which settings are used
+
+`run`, `sync` and `ext list` build the bot's [`Settings`](reference/config.md). The class
+comes from, in order:
+
+1. `--settings module:Class`;
+2. `[tool.botbase] settings = "module:Class"` in `./pyproject.toml` — projects generated
+   from the template set this, so the CLI sees their extension package and defaults;
+3. `botbase.config:Settings`.
+
+Each of those commands also takes `--env-file PATH` to read a different `.env`.
+
 ## `botbase run`
 
 Start the bot. Reads config from the environment / `.env`.
@@ -42,12 +54,15 @@ botbase sync --clear                  # remove all global commands
 botbase sync --clear --guild 123456789
 ```
 
-It logs in, loads extensions, does exactly the sync you asked for, and exits.
+It logs in, loads extensions, does exactly the sync you asked for, and exits. Make sure
+it uses your project's settings (see above) — a global sync pushes exactly the
+commands it loaded and removes the rest.
 
 ## `botbase ext list`
 
 List the extensions that would be discovered from `extension_packages`, marking any that
-are disabled.
+are disabled. A package that fails to import is listed with its error, and the command
+exits non-zero.
 
 ```
 botbase.ext.admin
@@ -59,7 +74,9 @@ botbase.ext.meta  (disabled)
 ## `botbase db ...`
 
 Alembic wrappers. Requires the `db` extra and an `alembic.ini` in the working directory
-(the template ships one).
+(the template ships one). `alembic/env.py` resolves the database URL through the bot's
+settings (`BOT_DATABASE__URL` from the environment or `.env`), so migrations always hit
+the same database the bot does.
 
 ```bash
 botbase db upgrade                 # alembic upgrade head

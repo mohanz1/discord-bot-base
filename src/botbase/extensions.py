@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from botbase.errors import ExtensionLoadError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from discord.ext import commands
 
@@ -41,7 +41,13 @@ class LoadReport:
         return not self.failed
 
 
-def discover_extensions(package: str, *, recursive: bool = True) -> list[str]:
+def discover_extensions(
+    package: str,
+    *,
+    recursive: bool = True,
+    skip: Callable[[str], bool] | None = None,
+    on_error: Callable[[str, Exception], None] | None = None,
+) -> list[str]:
     """Return the dotted paths of every extension module inside ``package``.
 
     Modules (and sub-packages) whose leaf name starts with ``_`` are ignored, so
@@ -53,8 +59,20 @@ def discover_extensions(package: str, *, recursive: bool = True) -> list[str]:
         Importable dotted package name, e.g. ``"mybot.ext"``.
     recursive:
         Also descend into sub-packages.
+    skip:
+        Called with each sub-package's dotted name before it is imported; return
+        ``True`` to leave that sub-package (and everything under it) out.
+    on_error:
+        Called with ``(name, exception)`` when ``package`` or a sub-package fails
+        to import; that branch is then left out. If ``None``, the error propagates.
     """
-    module = importlib.import_module(package)
+    try:
+        module = importlib.import_module(package)
+    except Exception as exc:
+        if on_error is None:
+            raise
+        on_error(package, exc)
+        return []
     search_paths = getattr(module, "__path__", None)
     if search_paths is None:
         # ``package`` is a plain module, not a package: treat it as one extension.
@@ -66,8 +84,8 @@ def discover_extensions(package: str, *, recursive: bool = True) -> list[str]:
         if leaf.startswith("_"):
             continue
         if info.ispkg:
-            if recursive:
-                found.extend(discover_extensions(info.name, recursive=True))
+            if recursive and not (skip is not None and skip(info.name)):
+                found.extend(discover_extensions(info.name, recursive=True, skip=skip, on_error=on_error))
             continue
         found.append(info.name)
     return sorted(found)
@@ -100,17 +118,30 @@ async def load_extensions(
     packages:
         Dotted packages to scan (see :func:`discover_extensions`).
     disabled:
-        Names to skip; matches the full dotted path or the bare leaf name.
+        Names to skip; matches the full dotted path or the bare leaf name. A
+        disabled sub-package is skipped whole, without being imported.
     strict:
-        If any extension raises, re-raise as :class:`~botbase.errors.ExtensionLoadError`
-        once loading finishes. Otherwise failures are only logged.
+        If any extension (or extension package) raises, re-raise as
+        :class:`~botbase.errors.ExtensionLoadError` once loading finishes.
+        Otherwise failures are only logged.
     """
     disabled = list(disabled)
     report = LoadReport()
     seen: set[str] = set()
 
+    def skip_package(name: str) -> bool:
+        if not _is_disabled(name, disabled):
+            return False
+        _log.info("skipping disabled extension package %s", name)
+        report.skipped.append(name)
+        return True
+
+    def discovery_failed(name: str, exc: Exception) -> None:
+        _log.error("failed to import extension package %s", name, exc_info=exc)
+        report.failed[name] = exc
+
     for package in packages:
-        for dotted in discover_extensions(package):
+        for dotted in discover_extensions(package, skip=skip_package, on_error=discovery_failed):
             if dotted in seen:
                 continue
             seen.add(dotted)

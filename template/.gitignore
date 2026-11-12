@@ -8,6 +8,8 @@ dist/
 .env
 .env.*
 !.env.example
+# the template's source for .env.example (ignored by `.env.*` otherwise)
+!.env.example.jinja
 
 .ruff_cache/
 .pytest_cache/

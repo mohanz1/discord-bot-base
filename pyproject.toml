@@ -32,7 +32,7 @@ db = [
     "sqlmodel>=0.0.22",
     "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20",
-    "alembic>=1.13",
+    "alembic>=1.16",
 ]
 speedups = [
     "discord-py[speed]>=2.6,<3",

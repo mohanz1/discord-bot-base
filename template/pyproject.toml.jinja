@@ -36,6 +36,10 @@ dev = [
     "ty==0.0.101",
 ]
 
+[tool.botbase]
+# Makes the `botbase` CLI (run / sync / ext list) use this project's Settings.
+settings = "{{ package_import_name }}.config:Settings"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ package_import_name }}"]
 

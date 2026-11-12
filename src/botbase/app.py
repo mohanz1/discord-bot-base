@@ -9,6 +9,7 @@ import importlib
 import logging
 import signal
 import time
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -74,8 +75,9 @@ class Bot(commands.Bot):
         """Run once, after login but before the gateway connection is ready."""
         self._started_monotonic = time.monotonic()
 
-        if self.settings.database is not None:
-            await self._init_database(self.settings.database)
+        database = self.settings.database
+        if database is not None:
+            await self._init_database(database)
 
         self.load_report = await load_extensions(
             self,
@@ -83,6 +85,11 @@ class Bot(commands.Bot):
             disabled=self.settings.disabled_extensions,
             strict=self.settings.strict_extension_loading,
         )
+
+        # After the extensions load: they are what imports the bot's model
+        # modules, so only now is every table registered on SQLModel.metadata.
+        if database is not None and database.auto_create and not database.run_migrations:
+            await self._create_tables()
 
         await self._sync_commands()
 
@@ -130,7 +137,8 @@ class Bot(commands.Bot):
             yield session
 
     async def _init_database(self, cfg: DatabaseSettings) -> None:
-        from botbase.database import build_engine, init_models, make_sessionmaker
+        """Create the engine and sessionmaker, and run migrations if configured."""
+        from botbase.database import build_engine, make_sessionmaker
 
         self._engine = build_engine(cfg)
         self._sessionmaker = make_sessionmaker(self._engine)
@@ -138,11 +146,18 @@ class Bot(commands.Bot):
         if cfg.run_migrations:
             from botbase.database.migrations import upgrade
 
-            await asyncio.to_thread(upgrade, "head")
+            # Hand Alembic the URL the bot connects to, so both always agree.
+            await asyncio.to_thread(partial(upgrade, "head", url=cfg.url))
             self.log.info("database migrations applied (alembic upgrade head)")
-        elif cfg.auto_create:
-            await init_models(self._engine)
-            self.log.info("database tables ensured (auto_create)")
+
+    async def _create_tables(self) -> None:
+        """``auto_create``: create any tables registered on the metadata that are missing."""
+        from botbase.database import init_models
+
+        if self._engine is None:  # pragma: no cover - only called after _init_database
+            return
+        await init_models(self._engine)
+        self.log.info("database tables ensured (auto_create)")
 
     # -- command syncing --------------------------------------------------------
 

@@ -77,8 +77,16 @@ class ErrorHandler(BaseCog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context[Bot], error: commands.CommandError) -> None:
-        """Handle classic prefix-command errors."""
+        """Handle classic prefix-command errors.
+
+        Skipped when the command or its cog has its own error handler, matching
+        discord.py's default :meth:`~discord.ext.commands.Bot.on_command_error`.
+        """
         if isinstance(error, commands.CommandNotFound):
+            return
+        if ctx.command is not None and ctx.command.has_error_handler():
+            return
+        if ctx.cog is not None and ctx.cog.has_error_handler():
             return
         if isinstance(error, (commands.UserInputError, commands.CheckFailure, commands.CommandOnCooldown)):
             await ctx.send(str(error))
