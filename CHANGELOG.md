@@ -16,6 +16,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `/dev` is now `guild_only`. Discord ignores `default_permissions` in DMs, so it
+  was listed for everyone who DMed the bot (non-owners were still refused).
 - Bumped `ruff` to 0.17.4 and `ty` to 0.0.101 (repo + template) and refreshed the
   lockfile. Dropped the `BotTree.on_error` `ty: ignore` — ty no longer flags it.
 - `/dev` is now a single command that opens an ephemeral owner-only panel
