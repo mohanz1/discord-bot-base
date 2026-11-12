@@ -84,3 +84,54 @@ async def test_reload_all_unwraps_extension_failed(bot: object, monkeypatch: pyt
     report = await reload_all(bot)
     assert report.failed
     assert all(exc is root for exc in report.failed.values())
+
+
+BADSUB = "tests.fixtures.badsubpkg"
+
+
+def test_discover_propagates_import_errors_by_default() -> None:
+    with pytest.raises(RuntimeError, match="optional dependency"):
+        discover_extensions(BADSUB)
+
+
+def test_discover_on_error_reports_and_skips_branch() -> None:
+    errors: dict[str, Exception] = {}
+    found = discover_extensions(BADSUB, on_error=errors.__setitem__)
+    assert found == [f"{BADSUB}.ok"]
+    assert list(errors) == [f"{BADSUB}.broken_sub"]
+    assert isinstance(errors[f"{BADSUB}.broken_sub"], RuntimeError)
+
+
+def test_discover_on_error_for_missing_top_level_package() -> None:
+    errors: dict[str, Exception] = {}
+    assert discover_extensions("tests.fixtures.does_not_exist", on_error=errors.__setitem__) == []
+    assert isinstance(errors["tests.fixtures.does_not_exist"], ModuleNotFoundError)
+
+
+def test_discover_skip_prevents_import() -> None:
+    seen: list[str] = []
+
+    def skip(name: str) -> bool:
+        seen.append(name)
+        return True
+
+    assert discover_extensions(BADSUB, skip=skip) == [f"{BADSUB}.ok"]
+    assert seen == [f"{BADSUB}.broken_sub"]
+
+
+async def test_load_survives_broken_sub_package(bot: object) -> None:
+    report = await load_extensions(bot, packages=[BADSUB])
+    assert report.loaded == [f"{BADSUB}.ok"]
+    assert isinstance(report.failed[f"{BADSUB}.broken_sub"], RuntimeError)
+
+
+async def test_load_disabled_sub_package_is_not_imported(bot: object) -> None:
+    report = await load_extensions(bot, packages=[BADSUB], disabled=["broken_sub"])
+    assert report.ok
+    assert report.skipped == [f"{BADSUB}.broken_sub"]
+    assert report.loaded == [f"{BADSUB}.ok"]
+
+
+async def test_load_strict_raises_for_broken_sub_package(bot: object) -> None:
+    with pytest.raises(ExtensionLoadError, match="broken_sub"):
+        await load_extensions(bot, packages=[BADSUB], strict=True)

@@ -41,8 +41,16 @@ class BotTree(app_commands.CommandTree):
         error: app_commands.AppCommandError,
         /,
     ) -> None:
-        """Delegate to :attr:`error_handler` if set, else the default behaviour."""
-        if self.error_handler is not None:
-            await self.error_handler(interaction, error)
-        else:
+        """Delegate to :attr:`error_handler` if set, else the default behaviour.
+
+        Like discord.py's default, the global handler is skipped when the command
+        already has its own error handler (``@cmd.error``, a group ``on_error`` or
+        ``cog_app_command_error``) -- the tree calls this *after* those ran.
+        """
+        if self.error_handler is None:
             await super().on_error(interaction, error)
+            return
+        has_local = getattr(interaction.command, "_has_any_error_handlers", None)
+        if callable(has_local) and has_local():
+            return
+        await self.error_handler(interaction, error)

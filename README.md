@@ -75,7 +75,7 @@ class Ops(BaseCog):
 ## Start a new bot from the template
 
 ```bash
-uvx copier copy gh:mohanz1/discord-bot-base my-new-bot   # or: copier copy ./template my-new-bot
+uvx copier copy gh:mohanz1/discord-bot-base my-new-bot   # or, from a checkout: copier copy --vcs-ref HEAD . my-new-bot
 cd my-new-bot
 uv sync
 cp .env.example .env

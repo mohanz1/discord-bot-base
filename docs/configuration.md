@@ -56,7 +56,7 @@ Setting `BOT_DATABASE__URL` enables the DB layer. Requires the `db` extra
 | --- | --- | --- |
 | `BOT_DATABASE__URL` | `sqlite+aiosqlite:///bot.sqlite3` | SQLAlchemy async URL. Use an async driver (`+aiosqlite`, `+asyncpg`). |
 | `BOT_DATABASE__ECHO` | `false` | Echo SQL to the logger. |
-| `BOT_DATABASE__AUTO_CREATE` | `true` | Create missing tables on startup. Good for development. |
+| `BOT_DATABASE__AUTO_CREATE` | `true` | Create missing tables on startup, after extensions load (so their models are registered). Good for development. |
 | `BOT_DATABASE__RUN_MIGRATIONS` | `false` | Run `alembic upgrade head` on startup. Takes precedence over `auto_create`. |
 
 See [Recipes → Database](recipes.md#database) for models and queries.

@@ -6,7 +6,8 @@ Guidance for AI agents working in this repository.
 
 `discord-bot-base` is a **framework**, not a bot. It's published to PyPI as
 `discord-bot-base` (import name `botbase`) and also carries a `copier` template in
-`template/` that scaffolds a full bot project.
+`template/` (config in the root `copier.yml`, `_subdirectory: template`) that scaffolds
+a full bot project.
 
 Keep the two concerns separate:
 

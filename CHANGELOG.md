@@ -13,6 +13,40 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   API reference. Built with `--strict` in CI and deployed to GitHub Pages on
   push to `main`.
 - `CLAUDE.md` — repository guidance for AI agents.
+- `botbase run | sync | ext list` take `--settings module:Class`, and otherwise read
+  `[tool.botbase] settings` from `./pyproject.toml` (the template sets it). Previously
+  they always used the base `Settings`, so `botbase sync` in a generated project pushed
+  a tree without the project's own commands — removing them from Discord. `sync` and
+  `ext list` also take `--env-file`.
+- `discover_extensions(skip=, on_error=)` and `botbase.database.migrations` `url=`.
+
+### Fixed
+
+- `copier copy gh:mohanz1/discord-bot-base` now actually uses the template: `copier.yml`
+  moved to the repo root with `_subdirectory: template` (copier only reads it from the
+  root, so it was copying the repository itself).
+- Generated projects now include `.env.example`. `template/.env.example.jinja` was
+  matched by the template's own `.env.*` ignore rule and never committed, so the
+  documented `cp .env.example .env` failed. The template smoke test now checks for it.
+- `auto_create` now runs after extensions load. It ran before, when the bot's models —
+  imported by its extensions — weren't registered yet, so no tables were created.
+- Alembic `env.py` (base + template) resolves the URL through `Settings` instead of
+  `os.environ`, so a URL set in `.env` is honoured; startup migrations
+  (`run_migrations`) are handed the bot's exact URL. Previously migrations could run
+  against a different database than the bot's.
+- Template projects with `use_database` enable the database by default instead of
+  raising "Database not configured" when `BOT_DATABASE__URL` isn't set.
+- `botbase db revision -m "..."` works as documented (the message was positional-only;
+  that form is still accepted).
+- A sub-package `__init__` that fails to import no longer aborts startup with
+  `strict_extension_loading = false`: it's logged and recorded on `load_report.failed`.
+  A disabled sub-package is skipped without being imported.
+- The global error handlers (`BotTree.on_error` + the `errors` extension's
+  `on_command_error`) step aside when the command or cog has its own error handler,
+  as discord.py's defaults do, instead of replying and logging a second time.
+- `alembic.ini` (base + template) uses `path_separator` instead of the deprecated
+  `version_path_separator`, silencing a `DeprecationWarning` on every Alembic command.
+  The `[db]` extra now needs `alembic>=1.16`.
 
 ### Changed
 

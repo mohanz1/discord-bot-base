@@ -3,18 +3,31 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
+from botbase.config import DatabaseSettings, Settings
+
 # Import your bot's models here so their tables register on SQLModel.metadata.
 from botbase.database import SQLModel
+from botbase.database.migrations import URL_ATTRIBUTE
 
 config = context.config
 
-_url = os.environ.get("BOT_DATABASE__URL", "sqlite+aiosqlite:///bot.sqlite3")
+
+def _resolve_url() -> str:
+    # 1. The URL the running bot handed over (BOT_DATABASE__RUN_MIGRATIONS).
+    # 2. The bot's own settings: BOT_DATABASE__URL from the environment or .env.
+    #    Use your bot's Settings subclass here if it changes the defaults.
+    explicit = config.attributes.get(URL_ATTRIBUTE)
+    if explicit:
+        return explicit
+    return (Settings().database or DatabaseSettings()).url
+
+
+_url = _resolve_url()
 config.set_main_option("sqlalchemy.url", _url)
 
 target_metadata = SQLModel.metadata

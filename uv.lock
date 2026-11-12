@@ -761,7 +761,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'db'", specifier = ">=0.20" },
-    { name = "alembic", marker = "extra == 'db'", specifier = ">=1.13" },
+    { name = "alembic", marker = "extra == 'db'", specifier = ">=1.16" },
     { name = "discord-bot-base", extras = ["db"], marker = "extra == 'all'" },
     { name = "discord-bot-base", extras = ["rich"], marker = "extra == 'all'" },
     { name = "discord-bot-base", extras = ["speedups"], marker = "extra == 'all'" },

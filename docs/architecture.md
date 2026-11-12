@@ -26,13 +26,17 @@ wrapper; you can also construct [`Bot`](reference/app.md) yourself and call
 gateway. In order:
 
 1. **Database** — if `settings.database` is set, build the async engine + session factory.
-   Then, depending on the [`DatabaseSettings`](reference/config.md):
-     - `run_migrations = true` → `alembic upgrade head` (run in a thread);
-     - else `auto_create = true` → `SQLModel.metadata.create_all` for any missing tables.
+   With `run_migrations = true`, run `alembic upgrade head` (in a thread) against the
+   bot's own URL.
 2. **Extensions** — `load_extensions()` discovers and loads every module in
    `extension_packages` (minus `disabled_extensions`). The result is stored on
    `bot.load_report` ([`LoadReport`](reference/extensions.md)).
-3. **Command sync** — skipped if `sync_commands_on_startup = false`. If `dev_guild_ids`
+3. **Tables** — with `auto_create = true` (and no `run_migrations`),
+   `SQLModel.metadata.create_all` for any missing tables. This runs *after* the
+   extensions load because they are what import the bot's model modules; a table
+   whose model nothing has imported yet isn't on the metadata. (So an extension's
+   `cog_load` can't query `auto_create` tables on a brand-new database.)
+4. **Command sync** — skipped if `sync_commands_on_startup = false`. If `dev_guild_ids`
    is set, commands are `copy_global_to`'d and synced **per guild** (instant). Otherwise
    a single global `tree.sync()` (can take up to an hour to propagate).
 
@@ -47,8 +51,9 @@ how-to; the mechanics:
   `_` are skipped; sub-packages are descended into.
 - **Loading** — [`load_extensions()`](reference/extensions.md) iterates the discovered
   modules across every configured package, skips anything in `disabled` (matched by full
-  dotted path **or** bare leaf name), and calls `bot.load_extension()` on the rest. Each
-  failure is caught, logged, and collected; the underlying exception (unwrapped from
+  dotted path **or** bare leaf name; a disabled sub-package is never imported), and
+  calls `bot.load_extension()` on the rest. Each failure — including a package or
+  sub-package whose `__init__` fails to import — is caught, logged, and collected; the underlying exception (unwrapped from
   discord.py's `ExtensionFailed`) is kept on the report. With `strict_extension_loading =
   true` a combined [`ExtensionLoadError`](reference/errors.md) is raised at the end.
 - **Reloading** — [`reload_all(bot)`](reference/extensions.md) reloads every currently
@@ -81,13 +86,16 @@ subclassing `Settings` (the template does this to change `extension_packages`).
   Override `interaction_check` (and pass `tree_cls=` to `Bot`) to gate *all* slash
   commands — allow-list, block-list, maintenance mode.
 - `BotTree` also holds a pluggable `error_handler`. The built-in `errors` extension sets
-  it on load and clears it on unload. That handler:
+  it on load and clears it on unload. It is skipped for a command that has its own
+  handler (`@cmd.error`, a group's `on_error`, `cog_app_command_error`), as discord.py's
+  default is. Otherwise that handler:
     - **ignores** `CommandNotFound` (usually a stale registration);
     - turns *expected* errors (`MissingPermissions`, `CommandOnCooldown`, `CheckFailure`,
       …) into a short ephemeral reply;
     - logs anything else with a traceback and sends a generic ephemeral message.
   The reply is wrapped so a dead/expired interaction can't raise a second exception.
-- Prefix-command errors are handled by an `on_command_error` listener in the same cog.
+- Prefix-command errors are handled by an `on_command_error` listener in the same cog,
+  which likewise stays out of the way of a command's or cog's own error handler.
 
 ## Owner-only cogs
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from botbase import cli
@@ -19,10 +21,111 @@ def test_version_subcommand(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_run_subcommand_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    from botbase.config import get_settings
+
     calls: list[object] = []
     monkeypatch.setattr("botbase.app.run", lambda settings=None: calls.append(settings))
     assert cli.main(["run"]) == 0
-    assert calls == [None]
+    assert calls == [get_settings()]
+
+
+def test_run_uses_settings_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.fixtures.custom_settings import CustomSettings
+
+    calls: list[object] = []
+    monkeypatch.setattr("botbase.app.run", lambda settings=None: calls.append(settings))
+    assert cli.main(["run", "--settings", "tests.fixtures.custom_settings:CustomSettings"]) == 0
+    assert isinstance(calls[0], CustomSettings)
+
+
+def test_run_env_file_with_base_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = tmp_path / "prod.env"
+    env.write_text("BOT_LOG_LEVEL=DEBUG\n")
+    calls: list[object] = []
+    monkeypatch.setattr("botbase.app.run", lambda settings=None: calls.append(settings))
+    assert cli.main(["run", "--env-file", str(env)]) == 0
+    assert calls[0].log_level == "DEBUG"  # type: ignore[attr-defined]
+
+
+def test_settings_from_pyproject(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.botbase]\nsettings = "tests.fixtures.custom_settings:CustomSettings"\n'
+    )
+    assert cli.main(["ext", "list"]) == 0
+    out = capsys.readouterr().out
+    assert "tests.fixtures.extpkg.alpha" in out
+    assert "tests.fixtures.extpkg.broken  (disabled)" in out
+    assert "botbase.ext" not in out
+
+
+def test_pyproject_without_botbase_table_uses_base(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    assert cli.main(["ext", "list"]) == 0
+    assert "botbase.ext.meta" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("spec", "fragment"),
+    [
+        ("no_colon_here", "expected 'module:ClassName'"),
+        ("tests.fixtures.does_not_exist:X", "Cannot load"),
+        ("tests.fixtures.custom_settings:Missing", "Cannot load"),
+        ("tests.fixtures.custom_settings:NotSettings", "not a botbase.Settings subclass"),
+    ],
+)
+@pytest.mark.parametrize("command", [["run"], ["ext", "list"], ["sync"]])
+def test_bad_settings_spec_is_graceful(
+    spec: str,
+    fragment: str,
+    command: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main([*command, "--settings", spec]) == 1
+    assert fragment in capsys.readouterr().out
+
+
+def test_ext_list_reports_broken_package(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOT_EXTENSION_PACKAGES", '["tests.fixtures.badsubpkg"]')
+    assert cli.main(["ext", "list"]) == 1
+    out = capsys.readouterr().out
+    assert "tests.fixtures.badsubpkg.ok" in out
+    assert "tests.fixtures.badsubpkg.broken_sub  (failed to import: optional dependency missing)" in out
+
+
+def test_ext_list_skips_disabled_sub_package(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BOT_EXTENSION_PACKAGES", '["tests.fixtures.badsubpkg"]')
+    monkeypatch.setenv("BOT_DISABLED_EXTENSIONS", '["broken_sub"]')
+    assert cli.main(["ext", "list"]) == 0
+    assert "failed" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["db", "revision", "-m", "add notes"],
+        ["db", "revision", "--message", "add notes"],
+        ["db", "revision", "add notes"],
+    ],
+)
+def test_db_revision_message_forms(argv: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("alembic")
+    calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        "botbase.database.migrations.revision",
+        lambda message, *, autogenerate: calls.append((message, autogenerate)),
+    )
+    assert cli.main([*argv, "--no-autogenerate"]) == 0
+    assert calls == [("add notes", False)]
+
+
+def test_db_revision_requires_message(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["db", "revision"])
+    assert excinfo.value.code == 2
+    assert "message is required" in capsys.readouterr().err
 
 
 def test_ext_list(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:

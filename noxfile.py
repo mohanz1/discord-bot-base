@@ -73,11 +73,10 @@ def tests(session: nox.Session) -> None:
 
 @nox.session
 def template(session: nox.Session) -> None:
-    """Render template/ (with and without a database) and run its own checks."""
+    """Render the copier template (with and without a database) and run its own checks."""
     from copier import run_copy
 
     root = Path(__file__).parent
-    template_dir = root / "template"
     base = {
         "project_name": "Demo Bot",
         "project_slug": "demo-bot",
@@ -90,14 +89,22 @@ def template(session: nox.Session) -> None:
     for with_db in (False, True):
         dst = Path(tempfile.mkdtemp(prefix=f"tmpl-db{int(with_db)}-"))
         try:
+            # Render from the repo root, exactly like `copier copy gh:...`, so the root
+            # copier.yml (`_subdirectory: template`) is what's exercised. vcs_ref=HEAD
+            # makes copier include uncommitted changes instead of the latest tag.
             run_copy(
-                str(template_dir),
+                str(root),
                 str(dst),
+                vcs_ref="HEAD",
                 data={**base, "use_database": with_db},
                 defaults=True,
                 unsafe=True,
             )
             session.log(f"rendered template (use_database={with_db}) -> {dst}")
+            # Files that must survive rendering from git (e.g. not swallowed by a .gitignore).
+            for required in (".env.example", "README.md", "Dockerfile"):
+                if not (dst / required).is_file():
+                    session.error(f"rendered template is missing {required}")
             # Smoke tests run before discord-bot-base is on PyPI: point at this checkout.
             pyproject = dst / "pyproject.toml"
             pyproject.write_text(
