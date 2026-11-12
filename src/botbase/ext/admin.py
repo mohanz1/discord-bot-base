@@ -8,8 +8,10 @@ ship it.
 
 ``/dev`` carries ``default_permissions`` of *nothing*, so Discord's command
 picker hides it from everyone without admin in the guild; ``/help`` hides it too
-via the cog's ``owner_only`` flag. To pin it to a single user, add a command
-override in *Server Settings -> Integrations* (Discord offers no API for that).
+via the cog's ``owner_only`` flag. It is also ``guild_only``: Discord ignores
+``default_permissions`` in DMs, so without that it would show to *everyone* who
+DMs the bot. To pin it to a single user, add a command override in
+*Server Settings -> Integrations* (Discord offers no API for that).
 """
 
 from __future__ import annotations
@@ -306,6 +308,7 @@ class Admin(BaseCog):
 
     @app_commands.command(name="dev", description="Owner-only maintenance tools.")
     @app_commands.default_permissions()
+    @app_commands.guild_only()  # default_permissions doesn't apply in DMs — keep it out of them
     async def dev(self, interaction: discord.Interaction) -> None:
         """Open the owner maintenance panel."""
         panel = DevPanel(self.bot, self._run_eval)

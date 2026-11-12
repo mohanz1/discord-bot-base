@@ -85,6 +85,17 @@ def test_dev_command_hidden_from_non_admins() -> None:
     assert perms.value == 0
 
 
+def test_dev_command_is_not_offered_in_dms() -> None:
+    # Discord ignores default_permissions in DMs, so /dev must be guild-only or every
+    # user who DMs the bot sees it in their command picker.
+    assert Admin.dev.guild_only is True
+    contexts = Admin.dev.allowed_contexts
+    assert contexts is not None
+    assert contexts.guild
+    assert not contexts.dm_channel
+    assert not contexts.private_channel
+
+
 async def test_panel_gate_blocks_non_owner(bot: Bot) -> None:
     bot.owner_id = 999
     panel = _panel(bot)
