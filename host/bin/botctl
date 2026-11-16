@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# botctl <bot> <docker compose args…> — docker compose for one bot, wired to the shared
+# compose file and that bot's deploy.env. Run as the deploy user (or root).
+#
+#   botctl sythe-bot ps
+#   botctl sythe-bot logs -f
+#   botctl sythe-bot restart
+#   botctl sythe-bot run --rm --entrypoint botbase bot version
+#   botctl list                       # every bot on this host and its state
+set -euo pipefail
+# shellcheck source=../lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
+
+if [[ "${1:-}" == list ]]; then
+  for envfile in "$BOTS_ROOT"/*/deploy.env; do
+    [[ -e "$envfile" ]] || continue
+    name="$(basename "$(dirname "$envfile")")"
+    cid="$(bot_compose "$name" ps -q bot 2>/dev/null || true)"
+    state="$([[ -n "$cid" ]] && docker inspect -f '{{.State.Status}} since {{.State.StartedAt}}' "$cid" || echo "not running")"
+    printf '%-24s %-48s %s\n' "$name" "$(env_value "$envfile" IMAGE):$(env_value "$envfile" TAG)" "$state"
+  done
+  exit 0
+fi
+
+[[ $# -ge 2 ]] || die "usage: botctl <bot> <docker compose args…> | botctl list"
+bot_compose "$@"

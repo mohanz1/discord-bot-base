@@ -187,11 +187,13 @@ src/botbase/
   ext/            meta · help · errors · admin (built-in extensions, each disable-able)
   database/       async engine + session + Alembic wrappers ([db] extra; no models shipped)
 alembic/          reference async env.py + alembic.ini (bots keep their own copy)
-template/         copier template — a full bot project: cogs, models, Dockerfile, migrations, CI
+template/         copier template — a full bot project: cogs, models, Dockerfile, migrations, CI, release
+host/             scripts for a VM that runs several bots (install.sh, deploy, botctl, add-bot, backups)
 ```
 
-Deployment lives in `template/` (Docker, migrations, a domain model), not here — this repo is the
-installable framework.
+Deployment lives in `template/` (Docker, migrations, the release workflow) and `host/` (the
+machine those bots run on — see [Hosting](docs/hosting.md)), not in the package — this repo is
+the installable framework.
 
 ## Development
 

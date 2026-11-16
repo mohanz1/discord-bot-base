@@ -1,0 +1,32 @@
+# One compose file for every bot on the host — installed to /srv/bots/host/ by
+# install.sh and used through `botctl` / `deploy` (never edited per bot, and never
+# shipped by CI: a deploy key can only restart its bot, not change how it runs).
+#
+# Per bot:  <bot>/deploy.env  IMAGE, TAG (default latest), MEM_LIMIT (default 384m)
+#           <bot>/.env        the bot's BOT_* settings and secrets
+#           <bot>/compose.override.yaml  optional, admin-written exceptions
+# The project name is the bot's name (botctl / deploy pass --project-name).
+
+services:
+  bot:
+    image: ${IMAGE:?set IMAGE in deploy.env}:${TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    # Graceful shutdown: botbase closes the gateway on SIGTERM well within this.
+    stop_grace_period: 20s
+    # One runaway bot can't take the others down with it.
+    mem_limit: ${MEM_LIMIT:-384m}
+    # Bots need no privileges, no ports and no writable image.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

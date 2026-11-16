@@ -25,7 +25,7 @@ jobs:
           enable-cache: true
           cache-suffix: ${{ github.job }}
       - run: uv sync --all-extras
-      - run: uv run nox -s lint spelling slots
+      - run: uv run nox -s lint spelling slots host
 
   types:
     runs-on: ubuntu-latest

@@ -27,15 +27,19 @@ LABEL org.opencontainers.image.title="{{ project_slug }}" \
       org.opencontainers.image.source="https://github.com/{{ github_owner }}/{{ project_slug }}" \
       org.opencontainers.image.licenses="MIT"
 
-RUN groupadd --system bot && useradd --system --gid bot --home /app bot
+# Fixed uid/gid 10001 — the host convention (discord-bot-base docs: Hosting): each
+# bot's ./data is chowned to it and bind-mounted at /app/data, the only writable path.
+RUN groupadd --system --gid 10001 bot \
+ && useradd --system --uid 10001 --gid bot --home /app --no-create-home bot \
+ && mkdir -p /app/data \
+ && chown bot:bot /app/data
 
 WORKDIR /app
-COPY --from=build --chown=bot:bot /app/.venv /app/.venv
+COPY --from=build /app/.venv /app/.venv
 {%- if use_database %}
-COPY --from=build --chown=bot:bot /app/alembic /app/alembic
-COPY --from=build --chown=bot:bot /app/alembic.ini /app/alembic.ini
+COPY --from=build /app/alembic /app/alembic
+COPY --from=build /app/alembic.ini /app/alembic.ini
 {%- endif %}
-RUN chown bot:bot /app   # let the default sqlite path work; use a volume in prod
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

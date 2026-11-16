@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`host/`, for running several bots on one VM** ([Hosting](docs/hosting.md)).
+  `install.sh` sets up the machine. Every bot then runs under one shared, hardened
+  `compose.yaml` (read-only, no capabilities, a memory limit), and `add-bot`
+  registers a bot.
+  - `deploy` pulls the image, snapshots the DB, restarts the bot and checks that it
+    logs in to Discord. CI runs it as an SSH forced command, so each bot's key can only
+    redeploy that bot.
+  - `botctl` wraps `docker compose` for one bot, and `backup` + `bot-backup@.timer`
+    take nightly SQLite backups to object storage.
+  - `host-check` pings the whole host's disk, memory and Docker health to healthchecks.io.
+- Template: `release.yml` builds and pushes the image after CI passes on `main` and
+  deploys it through `host/`. The `Dockerfile` runs as uid 10001 and makes only
+  `/app/data` writable.
 - Documentation site (mkdocs-material) — getting started, architecture,
   configuration, extension guide, recipes, CLI, deployment, and an auto-generated
   API reference. Built with `--strict` in CI and deployed to GitHub Pages on
@@ -22,6 +35,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Template: the generated `ci.yml` wasn't valid YAML (a `{% raw -%}` stripped the
+  indentation of `cache-suffix:`), so a new bot's CI never ran. `nox -s template` now
+  runs `actionlint` on the rendered workflows.
 - `copier copy gh:mohanz1/discord-bot-base` now actually uses the template: `copier.yml`
   moved to the repo root with `_subdirectory: template` (copier only reads it from the
   root, so it was copying the repository itself).

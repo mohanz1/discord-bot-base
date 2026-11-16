@@ -15,7 +15,10 @@ Keep the two concerns separate:
   deployment files. If a change only makes sense for one bot, it belongs downstream or in
   the template, not here.
 - **`template/`** — a complete example bot project (cogs, models, `Dockerfile`,
-  migrations, CI). Jinja-templated; excluded from the base's `ruff`/`ty`.
+  migrations, CI, release). Jinja-templated; excluded from the base's `ruff`/`ty`.
+- **`host/`** — bash + systemd for the VM those bots run on (`docs/hosting.md`). The
+  template's `release.yml` and `Dockerfile` (uid 10001, `/app/data`) must match it.
+  Checked by `nox -s host` (shellcheck + actionlint).
 
 ## Layout
 
@@ -85,4 +88,5 @@ Read `docs/architecture.md` before making structural changes.
 | Change startup behaviour | `Bot.setup_hook` / `run()` in `src/botbase/app.py` |
 | Add a CLI subcommand | `_build_parser()` in `src/botbase/cli.py` |
 | Change what the template generates | `template/` (verify with `uv run nox -s template`) |
+| Change the host scripts | `host/` + `docs/hosting.md` (verify with `uv run nox -s host`) |
 | Build the docs | `uv run nox -s docs` → `site/` |

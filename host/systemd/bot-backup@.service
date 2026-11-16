@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up the %i bot's SQLite database to object storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/srv/bots/host/bin/backup %i

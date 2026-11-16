@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# add-bot <bot> <image> [--no-db] [--key 'ssh-ed25519 AAAA… comment']   (as root)
+#
+# Sets up /srv/bots/<bot>/ for a new bot, or re-runs safely on an existing one:
+#   deploy.env   IMAGE=<image>, TAG=latest
+#   .env         a starter (BOT_TOKEN, the SQLite path) — fill it in; never overwritten
+#   data/        owned by the container's uid 10001
+#   backups/     pre-deploy snapshots (deploy user)
+# and, unless --no-db, enables its nightly backup timer. --key adds the bot's CI
+# deploy key, pinned to `deploy <bot>` (see host/bin/deploy).
+set -euo pipefail
+# shellcheck source=../lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
+
+[[ $EUID -eq 0 ]] || die "run as root (sudo)"
+bot="${1:-}"
+image="${2:-}"
+shift 2 || die "usage: add-bot <bot> <image> [--no-db] [--key '<public key>']"
+dir="$(bot_dir "$bot")"
+[[ "$image" =~ ^[a-z0-9./_-]+$ ]] || die "bad image '$image' (no tag — e.g. ghcr.io/owner/my-bot)"
+db=1
+key=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-db) db=0 ;;
+    --key) key="${2:-}"; shift ;;
+    *) die "unknown option $1" ;;
+  esac
+  shift
+done
+
+install -d -o root -g root -m 755 "$dir"
+# 755: the deploy user reads bot.db for snapshots and backups (VACUUM INTO only reads).
+install -d -o "$BOT_UID" -g "$BOT_UID" -m 755 "$dir/data"
+install -d -o deploy -g deploy -m 750 "$dir/backups"
+
+if [[ ! -f "$dir/deploy.env" ]]; then
+  printf 'IMAGE=%s\nTAG=latest\n# MEM_LIMIT=384m\n' "$image" >"$dir/deploy.env"
+  echo "add-bot: wrote $dir/deploy.env"
+elif [[ "$(env_value "$dir/deploy.env" IMAGE)" != "$image" ]]; then
+  die "$dir/deploy.env already names IMAGE=$(env_value "$dir/deploy.env" IMAGE) — edit it by hand to change"
+fi
+chown root:deploy "$dir/deploy.env" && chmod 640 "$dir/deploy.env"
+
+if [[ ! -f "$dir/.env" ]]; then
+  {
+    echo "# $bot — BOT_* settings and secrets (compose reads this; it never leaves the host)."
+    echo "BOT_TOKEN="
+    echo "# BOT_OWNER_IDS=[]"
+    echo "# BOT_HEALTHCHECK_URL=https://hc-ping.com/<uuid>"
+    if ((db)); then
+      echo "BOT_DATABASE__URL=sqlite+aiosqlite:////app/data/bot.db"
+      echo "BOT_DATABASE__RUN_MIGRATIONS=true"
+    fi
+  } >"$dir/.env"
+  echo "add-bot: wrote a starter $dir/.env — fill it in (sudoedit $dir/.env)"
+fi
+chown root:deploy "$dir/.env" && chmod 640 "$dir/.env"
+
+if ((db)) && [[ -d /run/systemd/system ]]; then
+  systemctl enable --now "bot-backup@$bot.timer" >/dev/null
+  echo "add-bot: nightly backup on (bot-backup@$bot.timer)"
+fi
+
+if [[ -n "$key" ]]; then
+  [[ "$key" =~ ^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa)\ [A-Za-z0-9+/=]+(\ [^\"]*)?$ ]] ||
+    die "--key doesn't look like one public key line"
+  keys=/home/deploy/.ssh/authorized_keys
+  blob="$(cut -d' ' -f2 <<<"$key")"
+  if grep -qF "$blob" "$keys" 2>/dev/null; then
+    echo "add-bot: that key is already in $keys — not adding it again"
+  else
+    echo "command=\"$HOST_DIR/bin/deploy $bot\",restrict $key" >>"$keys"
+    chown deploy:deploy "$keys" && chmod 600 "$keys"
+    echo "add-bot: deploy key added, pinned to 'deploy $bot'"
+  fi
+fi
+
+echo "add-bot: $bot ready. Next: fill in .env, then 'sudo -u deploy $HOST_DIR/bin/deploy $bot' (or push to main)."

@@ -2,7 +2,8 @@
 
 Deployment artifacts live in a **project scaffolded from the template**, not in the
 framework package. A generated project ships a production `Dockerfile`, `.dockerignore`,
-Alembic migrations, and CI.
+Alembic migrations, CI, and a release workflow. To run bots on a VM of your own,
+several to a machine, see [Hosting](hosting.md).
 
 ## Docker
 
