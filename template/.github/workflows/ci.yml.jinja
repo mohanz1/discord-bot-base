@@ -29,7 +29,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
-{% raw -%}
+{%- raw %}
           cache-suffix: ${{ github.job }}-${{ matrix.python-version }}
           python-version: ${{ matrix.python-version }}
 {%- endraw %}

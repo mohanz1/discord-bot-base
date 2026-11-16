@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# deploy <bot> [sha] — pull and restart one bot: snapshot its DB, start the new image,
+# and fail unless it logs in to Discord.
+#
+# CI runs this as an SSH *forced command*: the bot's deploy key in
+# ~deploy/.ssh/authorized_keys is pinned to
+#     command="/srv/bots/host/bin/deploy <bot>",restrict ssh-ed25519 …
+# so the key can redeploy that one bot and nothing else; the commit sha the client
+# asked for arrives in $SSH_ORIGINAL_COMMAND and only names the DB snapshot.
+set -euo pipefail
+# shellcheck source=../lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
+
+bot="${1:-}"
+dir="$(bot_dir "$bot")"
+sha="${2:-${SSH_ORIGINAL_COMMAND:-manual}}"
+[[ "$sha" == manual || "$sha" =~ ^[0-9a-f]{7,40}$ ]] || die "refusing '$sha': expected a commit sha"
+[[ "$sha" == manual ]] || sha="${sha:0:7}"
+[[ -f "$dir/deploy.env" ]] || die "$bot: not set up on this host (add-bot)"
+
+# One deploy per bot at a time; a second waits rather than interleaving.
+mkdir -p "$dir/backups"
+exec 9>"$dir/backups/.deploy.lock"
+flock -w 600 9 || die "$bot: another deploy has held the lock for 10 minutes"
+
+# A rollback pins TAG to a sha-… image in deploy.env. Auto-deploys stop (loudly) until
+# it's set back to latest, so the next push can't silently undo the rollback.
+tag="$(env_value "$dir/deploy.env" TAG)"
+if [[ "$sha" != manual && -n "$tag" && "$tag" != latest ]]; then
+  die "$bot is pinned to TAG=$tag in deploy.env — not deploying $sha. Set TAG=latest to resume."
+fi
+
+bot_compose "$bot" pull --quiet
+
+# The new image may run migrations on start, and the nightly backup can be a day old.
+if [[ -f "$dir/data/bot.db" ]]; then
+  snap="backups/pre-deploy-$sha.db"
+  rm -f "${dir:?}/$snap" # a re-run of the same commit; VACUUM INTO won't overwrite
+  sqlite3 -cmd '.timeout 10000' "$dir/data/bot.db" "VACUUM INTO '$dir/$snap'"
+  # shellcheck disable=SC2012 # our own pre-deploy-<sha>.db names, no odd characters
+  ls -1t "$dir"/backups/pre-deploy-*.db | tail -n +6 | xargs -r rm --
+  echo "deploy: $bot: snapshot $snap"
+fi
+
+bot_compose "$bot" up -d --remove-orphans
+
+# Healthy = the running container logged in since it last started, and hasn't
+# restarted. A crash loop, a bad token or a failed migration never gets there. If the
+# image didn't change, compose keeps the old container and its ready line still counts.
+# 3 minutes: startup syncs slash commands first, which Discord slows down after a few
+# restarts in a row.
+cid="$(bot_compose "$bot" ps -q bot)"
+[[ -n "$cid" ]] || die "$bot: no container after up"
+since="$(docker inspect -f '{{.State.StartedAt}}' "$cid")"
+ready() { docker logs --since "$since" "$cid" 2>&1 | grep -m1 'botbase: ready as'; }
+for _ in $(seq 60); do
+  ready >/dev/null && break
+  # A crash loop won't come good; don't make CI wait the full 3 minutes for it.
+  (($(docker inspect -f '{{.RestartCount}}' "$cid") < 3)) || break
+  sleep 3
+done
+state="$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$cid")"
+if ! ready >/dev/null || [[ "$state" != "running 0" ]]; then
+  echo "deploy: $bot: not healthy ($state) — last log lines:" >&2
+  docker logs --tail 50 "$cid" >&2 || true
+  echo "deploy: $bot: to roll back, pin TAG=sha-<good commit> in $dir/deploy.env and run" \
+    "'deploy $bot'; if a migration ran, restore $dir/backups/pre-deploy-$sha.db first (docs: Hosting → Rollback)" >&2
+  exit 1
+fi
+echo "deploy: $bot: $(ready)"
+docker image prune -f >/dev/null

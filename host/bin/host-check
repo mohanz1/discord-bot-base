@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# host-check — the whole-host health ping (every 5 minutes, host-check.timer).
+#
+# Each bot pings its own healthchecks.io check; this one catches what takes them all
+# down at once: a full disk, memory exhaustion, or a dead Docker daemon. It pings
+# HOST_HEALTHCHECK_URL (from /srv/bots/host.env) on success and <url>/fail with the
+# reason otherwise, so a silent host — powered off, wedged — also alerts.
+set -euo pipefail
+# shellcheck source=../lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
+
+url="${HOST_HEALTHCHECK_URL:-$(env_value "$BOTS_ROOT/host.env" HOST_HEALTHCHECK_URL)}"
+disk_max="${HOST_DISK_MAX_PCT:-85}"
+mem_min="${HOST_MEM_MIN_PCT:-10}"
+
+problems=()
+disk="$(df --output=pcent / | tail -n 1 | tr -dc '0-9')"
+((disk <= disk_max)) || problems+=("disk ${disk}% used (max ${disk_max}%)")
+mem="$(awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {printf "%d", a * 100 / t}' /proc/meminfo)"
+((mem >= mem_min)) || problems+=("memory ${mem}% available (min ${mem_min}%)")
+docker info >/dev/null 2>&1 || problems+=("docker daemon not responding")
+
+summary="disk ${disk}% used, memory ${mem}% available"
+if ((${#problems[@]})); then
+  report="$(printf '%s; ' "${problems[@]}")"
+  echo "host-check: FAIL — ${report%; }" >&2
+  [[ -n "$url" ]] && curl -fsS -m 10 --retry 3 --data-raw "${report%; } ($summary)" "$url/fail" >/dev/null
+  exit 1
+fi
+echo "host-check: ok — $summary"
+[[ -z "$url" ]] || curl -fsS -m 10 --retry 3 --data-raw "$summary" "$url" >/dev/null

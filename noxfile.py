@@ -16,7 +16,7 @@ from pathlib import Path
 import nox
 
 nox.options.default_venv_backend = "none"
-nox.options.sessions = ["lint", "types", "slots", "spelling", "tests", "docs"]
+nox.options.sessions = ["lint", "types", "slots", "spelling", "host", "tests", "docs"]
 
 EXTRAS = ("--extra", "db", "--extra", "rich")
 
@@ -63,6 +63,16 @@ def spelling(session: nox.Session) -> None:
 def docs(session: nox.Session) -> None:
     """Build the documentation site (strict — warnings fail)."""
     _uv_run(session, "mkdocs", "build", "--strict", *session.posargs)
+
+
+@nox.session
+def host(session: nox.Session) -> None:
+    """shellcheck the host scripts; actionlint the template's verbatim release workflow."""
+    host_dir = Path(__file__).parent / "host"
+    scripts = [str(p) for p in (host_dir / "bin").iterdir()] + [str(host_dir / "install.sh")]
+    # host/.shellcheckrc resolves the `source` lines relative to each script.
+    _uv_run(session, "shellcheck", "-s", "bash", *scripts, str(host_dir / "lib" / "common.sh"))
+    _uv_run(session, "actionlint", "template/.github/workflows/release.yml")
 
 
 @nox.session
@@ -119,6 +129,9 @@ def template(session: nox.Session) -> None:
             session.run("uv", "run", "ruff", "format", "--check", ".", external=True, env=env)
             session.run("uv", "run", "ty", "check", external=True, env=env)
             session.run("uv", "run", "pytest", "-q", external=True, env=env)
+            # The rendered workflows (CI is templated; release is copied verbatim).
+            workflows = sorted(str(f) for f in (dst / ".github" / "workflows").glob("*.yml"))
+            session.run("actionlint", *workflows, external=True)
         finally:
             session.chdir(str(root))
             shutil.rmtree(dst, ignore_errors=True)

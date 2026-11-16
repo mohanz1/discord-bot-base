@@ -1,0 +1,6 @@
+[Unit]
+Description=Prune unused Docker data older than a week
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker system prune -af --filter until=168h

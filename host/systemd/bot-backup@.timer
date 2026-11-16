@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly %i bot database backup
+
+[Timer]
+OnCalendar=*-*-* 04:17:00 UTC
+Persistent=true
+# Spread bots out so their backups don't all start at once.
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

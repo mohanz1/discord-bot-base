@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# backup <bot> — nightly SQLite backup of one bot to object storage, old copies pruned.
+# Run by bot-backup@<bot>.timer as the deploy user; settings from /srv/bots/host.env:
+#   BACKUP_REMOTE     rclone remote + bucket, e.g. s3:my-bots-backups (each bot gets <remote>/<bot>/)
+#   BACKUP_KEEP_DAYS  default 30
+set -euo pipefail
+# shellcheck source=../lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
+
+bot="${1:-}"
+dir="$(bot_dir "$bot")"
+db="$dir/data/bot.db"
+remote="${BACKUP_REMOTE:-$(env_value "$BOTS_ROOT/host.env" BACKUP_REMOTE)}"
+keep="${BACKUP_KEEP_DAYS:-$(env_value "$BOTS_ROOT/host.env" BACKUP_KEEP_DAYS)}"
+[[ -n "$remote" ]] || die "BACKUP_REMOTE is not set in $BOTS_ROOT/host.env"
+
+if [[ ! -f "$db" ]]; then
+  echo "backup: $bot has no data/bot.db — nothing to do"
+  exit 0
+fi
+
+snap="$(mktemp --suffix=.db)"
+trap 'rm -f "$snap"' EXIT
+rm -f "$snap" # VACUUM INTO wants a path that doesn't exist yet
+
+# VACUUM INTO takes a brief read lock and writes a compacted, standalone copy — safe
+# against the running bot. Never copy a live SQLite file directly.
+sqlite3 -cmd '.timeout 10000' "$db" "VACUUM INTO '$snap'"
+
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+rclone copyto "$snap" "$remote/$bot/bot-$stamp.db"
+rclone delete --min-age "${keep:-30}d" "$remote/$bot/"
+echo "backup: $bot: uploaded $remote/$bot/bot-$stamp.db"

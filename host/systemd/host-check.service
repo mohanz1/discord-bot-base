@@ -1,0 +1,9 @@
+[Unit]
+Description=Whole-host health check (disk, memory, Docker) pinged to healthchecks.io
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/srv/bots/host/bin/host-check

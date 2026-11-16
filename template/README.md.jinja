@@ -47,6 +47,16 @@ uv run botbase db upgrade
 During development `BOT_DATABASE__AUTO_CREATE=true` (the default) creates missing
 tables on startup, so you can skip migrations until the schema settles.
 {% endif %}
+## Deploy
+
+`.github/workflows/release.yml` builds `ghcr.io/{{ github_owner }}/{{ project_slug }}`
+after CI passes on `main`, and once the bot is on a host it redeploys it there. To set
+up a host (one small VM can run several bots) and add this bot to it, see
+[Hosting](https://mohanz1.github.io/discord-bot-base/hosting/): in short,
+`add-bot {{ project_slug }} ghcr.io/{{ github_owner }}/{{ project_slug }} --key '<ci public key>'`
+on the host, the `DEPLOY_HOST` / `DEPLOY_KEY` / `DEPLOY_KNOWN_HOSTS` secrets here, then
+the repo variable `DEPLOY_ENABLED=true`.
+
 ## Development
 
 ```bash

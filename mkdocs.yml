@@ -40,6 +40,7 @@ nav:
   - Recipes: recipes.md
   - CLI: cli.md
   - Deployment: deployment.md
+  - Hosting: hosting.md
   - API reference:
       - botbase.app: reference/app.md
       - botbase.config: reference/config.md
